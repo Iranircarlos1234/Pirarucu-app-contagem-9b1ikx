@@ -299,38 +299,38 @@ export default function CountingScreen() {
             <Text style={styles.sectionTitle}>Contagem Atual</Text>
             
             <View style={styles.countRow}>
-                                          <View style={styles.countItem}>
+              <View style={styles.countItem}>
                 <Text style={styles.countLabel}>Bodeco</Text>
                 <View style={styles.countControls}>
+                  <View style={styles.countDisplay}>
+                    <Text style={styles.countValue}>{currentBodeco}</Text>
+                  </View>
+                  
                   <TouchableOpacity 
                     style={[styles.countButton, styles.incrementButton]} 
                     onPress={() => setCurrentBodeco(Math.min(10000, currentBodeco + 1))}
                   >
-                    <MaterialIcons name="add" size={24} color="white" />
+                    <MaterialIcons name="add" size={32} color="white" />
                   </TouchableOpacity>
-                  
-                  <View style={styles.countDisplay}>
-                    <Text style={styles.countValue}>{currentBodeco}</Text>
-                  </View>
                 </View>
               </View>
 
               <View style={styles.countItem}>
                 <Text style={styles.countLabel}>Pirarucu</Text>
                 <View style={styles.countControls}>
+                  <View style={styles.countDisplay}>
+                    <Text style={styles.countValue}>{currentPirarucu}</Text>
+                  </View>
+                  
                   <TouchableOpacity 
                     style={[styles.countButton, styles.incrementButton]} 
                     onPress={() => setCurrentPirarucu(Math.min(10000, currentPirarucu + 1))}
                   >
-                    <MaterialIcons name="add" size={24} color="white" />
+                    <MaterialIcons name="add" size={32} color="white" />
                   </TouchableOpacity>
-                  
-                  <View style={styles.countDisplay}>
-                    <Text style={styles.countValue}>{currentPirarucu}</Text>
-                  </View>
                 </View>
               </View>
-                        </View>
+            </View>
 
             <TouchableOpacity style={styles.addCountButton} onPress={addCount}>
               <MaterialIcons name="add" size={24} color="white" />
@@ -550,9 +550,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   countButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -579,18 +579,6 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     fontSize: 24,
     fontWeight: 'bold',
-  },
-  resetButton: {
-    marginTop: 8,
-    backgroundColor: '#6B7280',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  resetButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
   },
   addCountButton: {
     backgroundColor: '#059669',
