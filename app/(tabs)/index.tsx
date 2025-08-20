@@ -330,26 +330,7 @@ export default function CountingScreen() {
                   </View>
                 </View>
               </View>
-            </View>
-
-            {/* Reset Buttons */}
-            <View style={styles.resetButtonsContainer}>
-              <TouchableOpacity 
-                style={[styles.resetCountButton, styles.resetBodecoButton]} 
-                onPress={() => setCurrentBodeco(0)}
-              >
-                <MaterialIcons name="refresh" size={20} color="white" />
-                <Text style={styles.resetCountButtonText}>Reset Bodeco</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.resetCountButton, styles.resetPirarucuButton]} 
-                onPress={() => setCurrentPirarucu(0)}
-              >
-                <MaterialIcons name="refresh" size={20} color="white" />
-                <Text style={styles.resetCountButtonText}>Reset Pirarucu</Text>
-              </TouchableOpacity>
-            </View>
+                        </View>
 
             <TouchableOpacity style={styles.addCountButton} onPress={addCount}>
               <MaterialIcons name="add" size={24} color="white" />
@@ -536,31 +517,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  resetButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  resetCountButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-  },
-  resetBodecoButton: {
-    backgroundColor: '#6B7280',
-  },
-  resetPirarucuButton: {
-    backgroundColor: '#6B7280',
-  },
-  resetCountButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
+
   countInputSection: {
     backgroundColor: 'white',
     borderRadius: 12,
