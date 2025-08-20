@@ -160,8 +160,8 @@ export default function CountingScreen() {
     setCurrentCount(currentCount + 1);
     
     showAlert(
-      'Sessão Finalizada e Salva Automaticamente', 
-      `Sessão ${currentCount} concluída e salva!\nPeríodo: ${horaInicio} - ${finalTime}\nTotal: ${totalBodeco} bodecos, ${totalPirarucu} pirarucus\n\nClique em "Iniciar Contagem" para nova sessão.`
+      'Contagem Finalizada e Salva Automaticamente', 
+      `Contagem ${currentCount} concluída e salva!\nPeríodo: ${horaInicio} - ${finalTime}\nTotal: ${totalBodeco} bodecos, ${totalPirarucu} pirarucus\n\nClique em "Iniciar Contagem" para nova contagem.`
     );
   };
 
@@ -282,7 +282,7 @@ export default function CountingScreen() {
             <View style={styles.activeControls}>
               <TouchableOpacity style={styles.finishButton} onPress={finishCurrentCount}>
                 <MaterialIcons name="stop" size={24} color="white" />
-                <Text style={styles.finishButtonText}>Finalizar Sessão</Text>
+                <Text style={styles.finishButtonText}>Finalizar Contagem</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.resetButton} onPress={resetSession}>
@@ -342,7 +342,7 @@ export default function CountingScreen() {
         {/* Summary */}
         {contagens.length > 0 && (
           <View style={styles.summarySection}>
-            <Text style={styles.sectionTitle}>Resumo da Sessão</Text>
+                        <Text style={styles.sectionTitle}>Resumo da Contagem</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Bodecos</Text>

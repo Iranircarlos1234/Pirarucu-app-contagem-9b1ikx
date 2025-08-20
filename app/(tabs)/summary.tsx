@@ -104,9 +104,9 @@ export default function SummaryScreen() {
     const filteredSessions = getFilteredSessions();
     const totalBodeco = filteredSessions.reduce((sum, session) => sum + session.totalBodeco, 0);
     const totalPirarucu = filteredSessions.reduce((sum, session) => sum + session.totalPirarucu, 0);
-    const totalSessions = filteredSessions.length;
+    const totalContagens = filteredSessions.length;
     
-    return { totalBodeco, totalPirarucu, totalSessions };
+    return { totalBodeco, totalPirarucu, totalContagens };
   };
 
   const getEnvironmentStats = () => {
@@ -118,7 +118,7 @@ export default function SummaryScreen() {
       
       return {
         ambiente: env,
-        sessoes: envSessions.length,
+        contagens: envSessions.length,
         totalBodeco,
         totalPirarucu,
       };
@@ -179,7 +179,7 @@ export default function SummaryScreen() {
     
     // Estatísticas Gerais
     content += '--- ESTATÍSTICAS GERAIS ---\n';
-    content += `Total de Sessões: ${overallStats.totalSessions}\n`;
+    content += `Total de Contagens: ${overallStats.totalContagens}\n`;
     content += `Total de Bodecos: ${overallStats.totalBodeco}\n`;
     content += `Total de Pirarucus: ${overallStats.totalPirarucu}\n\n`;
     
@@ -187,15 +187,15 @@ export default function SummaryScreen() {
     content += '--- ANÁLISE POR AMBIENTE ---\n';
     environmentStats.forEach(env => {
       content += `\n${env.ambiente}:\n`;
-      content += `  - Sessões: ${env.sessoes}\n`;
+      content += `  - Contagens: ${env.contagens}\n`;
       content += `  - Bodecos: ${env.totalBodeco}\n`;
       content += `  - Pirarucus: ${env.totalPirarucu}\n`;
     });
     
-    // Detalhes das Sessões
-    content += '\n--- DETALHES DAS SESSÕES ---\n';
+    // Detalhes das Contagens
+    content += '\n--- DETALHES DAS CONTAGENS ---\n';
     sessions.forEach((session, index) => {
-      content += `\nSessão ${index + 1}:\n`;
+      content += `\nContagem ${index + 1}:\n`;
       content += `  Ambiente: ${session.ambiente}\n`;
       content += `  Setor: ${session.setor}\n`;
       content += `  Contador: ${session.contador}\n`;
@@ -253,8 +253,8 @@ export default function SummaryScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <MaterialIcons name="assessment" size={32} color="#2563EB" />
-              <Text style={styles.statValue}>{overallStats.totalSessions}</Text>
-              <Text style={styles.statLabel}>Sessões</Text>
+              <Text style={styles.statValue}>{overallStats.totalContagens}</Text>
+              <Text style={styles.statLabel}>Contagens</Text>
             </View>
             
             <View style={styles.statCard}>
@@ -314,8 +314,8 @@ export default function SummaryScreen() {
                 
                 <View style={styles.environmentStats}>
                   <View style={styles.environmentStat}>
-                    <Text style={styles.environmentStatValue}>{env.sessoes}</Text>
-                    <Text style={styles.environmentStatLabel}>Sessões</Text>
+                    <Text style={styles.environmentStatValue}>{env.contagens}</Text>
+                    <Text style={styles.environmentStatLabel}>Contagens</Text>
                   </View>
                   
                   <View style={styles.environmentStat}>
@@ -336,7 +336,7 @@ export default function SummaryScreen() {
         {/* Recent Sessions */}
                 {getFilteredSessions().length > 0 && (
           <View style={styles.sessionsSection}>
-            <Text style={styles.sectionTitle}>Sessões Recentes</Text>
+                        <Text style={styles.sectionTitle}>Contagens Recentes</Text>
             
             {getFilteredSessions().slice(-5).reverse().map((session) => (
               <View key={session.id} style={styles.sessionCard}>
@@ -399,7 +399,7 @@ export default function SummaryScreen() {
             <MaterialIcons name="analytics" size={64} color="#9CA3AF" />
             <Text style={styles.emptyStateTitle}>Nenhuma contagem registrada</Text>
             <Text style={styles.emptyStateText}>
-              Vá para a aba "Contagem" e registre sua primeira sessão de contagem de pirarucu.
+              Vá para a aba "Contagem" e registre sua primeira contagem de pirarucu.
             </Text>
           </View>
         )}

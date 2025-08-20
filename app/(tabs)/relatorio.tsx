@@ -109,11 +109,11 @@ export default function RelatorioScreen() {
         setSavedReports(JSON.parse(storedReports));
       }
       
-      // Carregar sessões de contagem e pré-popular
+            // Carregar contagens e pré-popular
       const storedSessions = await AsyncStorage.getItem('pirarucu_sessions');
       if (storedSessions) {
         const sessions: CountSession[] = JSON.parse(storedSessions);
-        await prePopulateFromSessions(sessions);
+        await prePopulateFromContagens(sessions);
       } else {
         initializeEmptyRows();
       }
@@ -125,13 +125,13 @@ export default function RelatorioScreen() {
     }
   };
 
-  const prePopulateFromSessions = async (sessions: CountSession[]) => {
+  const prePopulateFromContagens = async (sessions: CountSession[]) => {
     if (sessions.length === 0) {
       initializeEmptyRows();
       return;
     }
 
-    // Agrupar sessões por contador
+    // Agrupar contagens por contador
     const contadorTotals = sessions.reduce((acc, session) => {
       const key = session.contador;
       if (!acc[key]) {
@@ -186,11 +186,10 @@ export default function RelatorioScreen() {
         setAmbiente(ultimoAmbiente);
       }
     }
-
-    // Pré-popular responsável com o último contador
-    const ultimaSessao = sessions[sessions.length - 1];
-    if (ultimaSessao) {
-      setResponsavel(ultimaSessao.contador);
+        // Pré-popular responsável com o último contador
+    const ultimaContagem = sessions[sessions.length - 1];
+    if (ultimaContagem) {
+      setResponsavel(ultimaContagem.contador);
     }
   };
   const initializeEmptyRows = () => {
@@ -279,7 +278,7 @@ export default function RelatorioScreen() {
       setSavedReports(updatedReports);
       await AsyncStorage.setItem('saved_reports', JSON.stringify(updatedReports));
 
-      showAlert('Relatório Salvo!', `Relatório "${ambiente}" salvo com sucesso!\nTotal: ${filledRows.length} registros`, () => {
+      showAlert('Relatório Salvo!', `Relatório "${ambiente}" salvo com sucesso!\nTotal: ${filledRows.length} contadores`, () => {
         // Iniciar novo registro
         setAmbiente('');
         setResponsavel('');

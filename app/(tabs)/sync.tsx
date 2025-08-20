@@ -98,8 +98,8 @@ export default function SyncScreen() {
 
   const prepareExportData = async () => {
     try {
-      const allData = {
-        sessions,
+            const allData = {
+        contagens: sessions,
         timestamp: new Date().toISOString(),
         version: '1.0',
         deviceId: syncCode,
@@ -122,7 +122,7 @@ export default function SyncScreen() {
 
       const importedData = JSON.parse(importCode);
       
-      if (!importedData.sessions || !Array.isArray(importedData.sessions)) {
+      if (!importedData.contagens || !Array.isArray(importedData.contagens)) {
         showAlert('Dados Inválidos', 'Formato de dados não reconhecido.');
         return;
       }
@@ -133,7 +133,7 @@ export default function SyncScreen() {
       
       // Evitar duplicatas baseado no ID
       const existingIds = new Set(currentSessions.map((s: CountSession) => s.id));
-      const newSessions = importedData.sessions.filter((s: CountSession) => !existingIds.has(s.id));
+      const newSessions = importedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
       
       const mergedSessions = [...currentSessions, ...newSessions];
       await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(mergedSessions));
@@ -142,7 +142,7 @@ export default function SyncScreen() {
       setImportCode('');
       setShowImportModal(false);
       
-      showAlert('Importação Concluída', `${newSessions.length} sessões importadas com sucesso!`);
+      showAlert('Importação Concluída', `${newSessions.length} contagens importadas com sucesso!`);
     } catch (error) {
       showAlert('Erro na Importação', 'Código inválido ou corrompido.');
     }
@@ -151,7 +151,7 @@ export default function SyncScreen() {
   const shareData = async () => {
     try {
       const allData = {
-        sessions,
+        contagens: sessions,
         timestamp: new Date().toISOString(),
         version: '1.0',
         deviceId: syncCode,
@@ -208,7 +208,7 @@ export default function SyncScreen() {
   const getTotalStats = () => {
     const totalBodeco = sessions.reduce((sum, session) => sum + session.totalBodeco, 0);
     const totalPirarucu = sessions.reduce((sum, session) => sum + session.totalPirarucu, 0);
-    return { totalBodeco, totalPirarucu, sessions: sessions.length };
+    return { totalBodeco, totalPirarucu, contagens: sessions.length };
   };
 
   const stats = getTotalStats();
@@ -246,8 +246,8 @@ export default function SyncScreen() {
           <Text style={styles.sectionTitle}>Dados Locais</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.sessions}</Text>
-              <Text style={styles.statLabel}>Sessões</Text>
+              <Text style={styles.statValue}>{stats.contagens}</Text>
+              <Text style={styles.statLabel}>Contagens</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.totalBodeco}</Text>
