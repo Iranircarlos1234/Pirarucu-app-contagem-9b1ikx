@@ -48,7 +48,7 @@ export default function TabLayout() {
           headerTitle: 'Resumo de Contagens',
         }}
       />
-      <Tabs.Screen
+            <Tabs.Screen
         name="relatorio"
         options={{
           title: 'Relatório Final',
@@ -56,6 +56,16 @@ export default function TabLayout() {
             <MaterialIcons name="table-chart" size={size} color={color} />
           ),
           headerTitle: 'Relatório Final',
+        }}
+      />
+      <Tabs.Screen
+        name="sync"
+        options={{
+          title: 'Sincronizar',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="sync" size={size} color={color} />
+          ),
+          headerTitle: 'Sincronização de Dados',
         }}
       />
     </Tabs>
