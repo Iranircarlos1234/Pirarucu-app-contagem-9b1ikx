@@ -175,10 +175,16 @@ export default function RelatorioScreen() {
 
     setManualData(initialRows);
 
-    // Pré-popular ambiente se todos forem iguais
+        // Pré-popular ambiente - usar o último ambiente ou o mais comum
     const ambientes = [...new Set(sessions.map(s => s.ambiente))];
     if (ambientes.length === 1) {
       setAmbiente(ambientes[0]);
+    } else if (ambientes.length > 1) {
+      // Se há múltiplos ambientes, usar o último registrado
+      const ultimoAmbiente = sessions[sessions.length - 1]?.ambiente;
+      if (ultimoAmbiente) {
+        setAmbiente(ultimoAmbiente);
+      }
     }
 
     // Pré-popular responsável com o último contador
