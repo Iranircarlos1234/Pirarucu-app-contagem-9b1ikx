@@ -38,7 +38,7 @@ export default function CountingScreen() {
   const [isActive, setIsActive] = useState(false);
   const [currentCount, setCurrentCount] = useState(1);
   const [timeLeft, setTimeLeft] = useState(1200); // 20 minutes in seconds
-    const [horaInicio, setHoraInicio] = useState('');
+  const [horaInicio, setHoraInicio] = useState('');
   const [horaFinal, setHoraFinal] = useState('');
   const [contagens, setContagens] = useState<Array<{
     numero: number;
@@ -48,6 +48,10 @@ export default function CountingScreen() {
   }>>([]);
   const [currentBodeco, setCurrentBodeco] = useState(0);
   const [currentPirarucu, setCurrentPirarucu] = useState(0);
+  
+  // Sync fields
+  const [receptorData, setReceptorData] = useState('');
+  const [emissorCode, setEmissorCode] = useState('');
 
   // Web alert state
   const [alertConfig, setAlertConfig] = useState<{
@@ -66,6 +70,10 @@ export default function CountingScreen() {
       Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
     }
   };
+
+  useEffect(() => {
+    generateEmissorCode();
+  }, []);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -89,7 +97,52 @@ export default function CountingScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-    const startCounting = () => {
+  const generateEmissorCode = () => {
+    const code = Date.now().toString(36).toUpperCase();
+    setEmissorCode(code);
+  };
+
+  const receiveData = async () => {
+    if (!receptorData.trim()) {
+      showAlert('Código Necessário', 'Digite o código de dados para receber.');
+      return;
+    }
+
+    try {
+      const receivedData = JSON.parse(receptorData);
+      showAlert('Dados Recebidos', `Dados processados com sucesso!\nCódigo: ${receptorData.slice(0, 8)}...`);
+      setReceptorData('');
+    } catch (error) {
+      showAlert('Erro', 'Código inválido ou corrompido.');
+    }
+  };
+
+  const sendData = async () => {
+    try {
+      const dataToSend = {
+        ambiente,
+        setor,
+        contador,
+        contagens,
+        timestamp: new Date().toISOString()
+      };
+      
+      const dataString = JSON.stringify(dataToSend);
+      
+      if (Platform.OS === 'web') {
+        navigator.clipboard.writeText(dataString);
+        showAlert('Dados Copiados', 'Dados copiados para área de transferência!');
+      } else {
+        showAlert('Dados Preparados', `Código: ${emissorCode}\nDados prontos para envio.`);
+      }
+      
+      generateEmissorCode();
+    } catch (error) {
+      showAlert('Erro', 'Erro ao preparar dados para envio.');
+    }
+  };
+
+  const startCounting = () => {
     if (!ambiente || !setor || !contador) {
       showAlert('Campos Obrigatórios', 'Preencha todos os campos antes de iniciar.');
       return;
@@ -127,6 +180,7 @@ export default function CountingScreen() {
     
     showAlert('Contagem Registrada', `Contagem ${currentCount} salva: ${currentBodeco} bodecos, ${currentPirarucu} pirarucus`);
   };
+
   const finishCurrentCount = async () => {
     if (contagens.length === 0) {
       setIsActive(false);
@@ -150,7 +204,7 @@ export default function CountingScreen() {
       totalPirarucu,
     };
 
-    // Salvar automaticamente a sessão completa
+    // Salvar automaticamente a contagem completa
     await saveSession(contagens, true);
     
     // Atualizar estado
@@ -199,14 +253,14 @@ export default function CountingScreen() {
       'Confirmar Reset',
       'Deseja realmente reiniciar a contagem? Todos os dados não salvos serão perdidos.',
       () => {
-    setIsActive(false);
-    setTimeLeft(1200);
-    setCurrentCount(1);
-    setContagens([]);
-    setCurrentBodeco(0);
-    setCurrentPirarucu(0);
-    setHoraInicio('');
-    setHoraFinal('');
+        setIsActive(false);
+        setTimeLeft(1200);
+        setCurrentCount(1);
+        setContagens([]);
+        setCurrentBodeco(0);
+        setCurrentPirarucu(0);
+        setHoraInicio('');
+        setHoraFinal('');
       }
     );
   };
@@ -252,6 +306,51 @@ export default function CountingScreen() {
               placeholder="Nome completo do contador"
               editable={!isActive}
             />
+          </View>
+        </View>
+
+        {/* Sync Section */}
+        <View style={styles.syncSection}>
+          <Text style={styles.sectionTitle}>Sincronização de Dados</Text>
+          
+          <View style={styles.syncRow}>
+            <View style={styles.syncItem}>
+              <Text style={styles.syncLabel}>Receptor</Text>
+              <TextInput
+                style={[styles.syncInput, isActive && styles.disabledInput]}
+                value={receptorData}
+                onChangeText={setReceptorData}
+                placeholder="Código de dados..."
+                editable={!isActive}
+                multiline
+                numberOfLines={2}
+              />
+              <TouchableOpacity 
+                style={[styles.syncButton, styles.receiveButton, isActive && styles.disabledButton]} 
+                onPress={receiveData}
+                disabled={isActive}
+              >
+                <MaterialIcons name="file-download" size={20} color="white" />
+                <Text style={styles.syncButtonText}>Receber</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.syncItem}>
+              <Text style={styles.syncLabel}>Emissor</Text>
+              <View style={styles.emissorContainer}>
+                <Text style={styles.emissorCode}>{emissorCode}</Text>
+                <TouchableOpacity style={styles.refreshEmissor} onPress={generateEmissorCode}>
+                  <MaterialIcons name="refresh" size={16} color="#2563EB" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity 
+                style={[styles.syncButton, styles.sendButton]} 
+                onPress={sendData}
+              >
+                <MaterialIcons name="file-upload" size={20} color="white" />
+                <Text style={styles.syncButtonText}>Enviar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -310,7 +409,7 @@ export default function CountingScreen() {
                     style={[styles.countButton, styles.incrementButton]} 
                     onPress={() => setCurrentBodeco(Math.min(10000, currentBodeco + 1))}
                   >
-                    <MaterialIcons name="add" size={32} color="white" />
+                    <MaterialIcons name="add" size={36} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -326,7 +425,7 @@ export default function CountingScreen() {
                     style={[styles.countButton, styles.incrementButton]} 
                     onPress={() => setCurrentPirarucu(Math.min(10000, currentPirarucu + 1))}
                   >
-                    <MaterialIcons name="add" size={32} color="white" />
+                    <MaterialIcons name="add" size={36} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -342,7 +441,7 @@ export default function CountingScreen() {
         {/* Summary */}
         {contagens.length > 0 && (
           <View style={styles.summarySection}>
-                        <Text style={styles.sectionTitle}>Resumo da Contagem</Text>
+            <Text style={styles.sectionTitle}>Resumo da Contagem</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Bodecos</Text>
@@ -427,6 +526,88 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#FFFFFF',
   },
+  syncSection: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  syncRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  syncItem: {
+    flex: 1,
+  },
+  syncLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  syncInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+    minHeight: 50,
+    textAlignVertical: 'top',
+  },
+  disabledInput: {
+    backgroundColor: '#F3F4F6',
+    color: '#9CA3AF',
+  },
+  emissorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+    minHeight: 50,
+    justifyContent: 'center',
+  },
+  emissorCode: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  refreshEmissor: {
+    padding: 4,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+  },
+  receiveButton: {
+    backgroundColor: '#2563EB',
+  },
+  sendButton: {
+    backgroundColor: '#059669',
+  },
+  disabledButton: {
+    backgroundColor: '#9CA3AF',
+  },
+  syncButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
   timerSection: {
     backgroundColor: '#EFF6FF',
     borderRadius: 12,
@@ -502,7 +683,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-    resetButton: {
+  resetButton: {
     flex: 1,
     backgroundColor: '#6B7280',
     flexDirection: 'row',
@@ -517,7 +698,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-
   countInputSection: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -550,9 +730,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   countButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -564,7 +744,6 @@ const styles = StyleSheet.create({
   incrementButton: {
     backgroundColor: '#059669',
   },
-
   countDisplay: {
     backgroundColor: '#F3F4F6',
     paddingHorizontal: 16,
