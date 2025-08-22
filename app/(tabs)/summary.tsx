@@ -300,36 +300,76 @@ export default function SummaryScreen() {
           </View>
         )}
 
-        {/* Environment Analysis */}
+                {/* Environment Analysis */}
         {environmentStats.length > 0 && (
           <View style={styles.analysisSection}>
             <Text style={styles.sectionTitle}>Análise por Ambiente</Text>
             
-            {environmentStats.map((env) => (
-              <View key={env.ambiente} style={styles.environmentCard}>
-                <View style={styles.environmentHeader}>
+            {selectedEnvironment === 'all' ? (
+              // Show summary cards for all environments
+              environmentStats.map((env) => (
+                <View key={env.ambiente} style={styles.environmentCard}>
+                  <View style={styles.environmentHeader}>
+                    <MaterialIcons name="location-on" size={24} color="#1E40AF" />
+                    <Text style={styles.environmentName}>{env.ambiente}</Text>
+                  </View>
+                  
+                  <View style={styles.environmentStats}>
+                    <View style={styles.environmentStat}>
+                      <Text style={styles.environmentStatValue}>{env.contagens}</Text>
+                      <Text style={styles.environmentStatLabel}>Contagens</Text>
+                    </View>
+                    
+                    <View style={styles.environmentStat}>
+                      <Text style={styles.environmentStatValue}>{env.totalBodeco}</Text>
+                      <Text style={styles.environmentStatLabel}>Bodecos</Text>
+                    </View>
+                    
+                    <View style={styles.environmentStat}>
+                      <Text style={styles.environmentStatValue}>{env.totalPirarucu}</Text>
+                      <Text style={styles.environmentStatLabel}>Pirarucus</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              // Show detailed table for selected environment
+              <View style={styles.environmentDetailCard}>
+                <View style={styles.environmentDetailHeader}>
                   <MaterialIcons name="location-on" size={24} color="#1E40AF" />
-                  <Text style={styles.environmentName}>{env.ambiente}</Text>
+                  <Text style={styles.environmentDetailName}>{selectedEnvironment}</Text>
                 </View>
                 
-                <View style={styles.environmentStats}>
-                  <View style={styles.environmentStat}>
-                    <Text style={styles.environmentStatValue}>{env.contagens}</Text>
-                    <Text style={styles.environmentStatLabel}>Contagens</Text>
+                {/* Table Header */}
+                <View style={styles.tableHeader}>
+                  <Text style={styles.tableHeaderCell}>Contador</Text>
+                  <Text style={styles.tableHeaderCell}>Período</Text>
+                  <Text style={styles.tableHeaderCell}>Bodecos</Text>
+                  <Text style={styles.tableHeaderCell}>Pirarucus</Text>
+                  <Text style={styles.tableHeaderCell}>Total</Text>
+                </View>
+                
+                {/* Table Rows */}
+                {getFilteredSessions().map((session, index) => (
+                  <View key={session.id} style={[styles.tableRow, index % 2 === 0 ? styles.evenTableRow : styles.oddTableRow]}>
+                    <Text style={styles.tableCell} numberOfLines={2}>{session.contador}</Text>
+                    <Text style={styles.tableCell}>{session.horaInicio} - {session.horaFinal}</Text>
+                    <Text style={styles.tableCellNumber}>{session.totalBodeco}</Text>
+                    <Text style={styles.tableCellNumber}>{session.totalPirarucu}</Text>
+                    <Text style={styles.tableCellNumber}>{session.totalBodeco + session.totalPirarucu}</Text>
                   </View>
-                  
-                  <View style={styles.environmentStat}>
-                    <Text style={styles.environmentStatValue}>{env.totalBodeco}</Text>
-                    <Text style={styles.environmentStatLabel}>Bodecos</Text>
-                  </View>
-                  
-                  <View style={styles.environmentStat}>
-                    <Text style={styles.environmentStatValue}>{env.totalPirarucu}</Text>
-                    <Text style={styles.environmentStatLabel}>Pirarucus</Text>
-                  </View>
+                ))}
+                
+                {/* Table Summary */}
+                <View style={styles.tableSummary}>
+                  <Text style={styles.tableSummaryLabel}>Totais:</Text>
+                  <Text style={styles.tableSummaryValue}>
+                    {getFilteredSessions().reduce((sum, s) => sum + s.totalBodeco, 0)} bodecos, {' '}
+                    {getFilteredSessions().reduce((sum, s) => sum + s.totalPirarucu, 0)} pirarucus
+                  </Text>
                 </View>
               </View>
-            ))}
+            )}
           </View>
         )}
 
@@ -707,9 +747,97 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
   },
-  modalButtonText: {
+    modalButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  environmentDetailCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  environmentDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E5E7EB',
+  },
+  environmentDetailName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#1E40AF',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 2,
+  },
+  tableHeaderCell: {
+    flex: 1,
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    minHeight: 48,
+  },
+  evenTableRow: {
+    backgroundColor: '#F8FAFC',
+  },
+  oddTableRow: {
+    backgroundColor: 'white',
+  },
+  tableCell: {
+    flex: 1,
+    fontSize: 12,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  tableCellNumber: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E40AF',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  tableSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  tableSummaryLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+  },
+  tableSummaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
   },
 });
