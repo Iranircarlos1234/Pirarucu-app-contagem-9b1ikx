@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { exportToCSV } from '../utils/exportExcel';
 
 interface CountSession {
   id: string;
@@ -98,7 +99,7 @@ export default function SyncScreen() {
 
   const prepareExportData = async () => {
     try {
-            const allData = {
+      const allData = {
         contagens: sessions,
         timestamp: new Date().toISOString(),
         version: '1.0',
@@ -110,6 +111,21 @@ export default function SyncScreen() {
       setShowExportModal(true);
     } catch (error) {
       showAlert('Erro', 'Erro ao preparar dados para exportação.');
+    }
+  };
+
+  const exportToExcel = async () => {
+    try {
+      if (sessions.length === 0) {
+        showAlert('Sem Dados', 'Não há contagens registradas para exportar.');
+        return;
+      }
+
+      await exportToCSV(sessions);
+      showAlert('Exportação Concluída', 'Dados exportados para Excel com sucesso!');
+    } catch (error) {
+      showAlert('Erro na Exportação', 'Não foi possível exportar os dados para Excel.');
+      console.log('Erro na exportação Excel:', error);
     }
   };
 
@@ -277,6 +293,11 @@ export default function SyncScreen() {
           <TouchableOpacity style={[styles.actionButton, styles.exportButton]} onPress={prepareExportData}>
             <MaterialIcons name="code" size={24} color="white" />
             <Text style={styles.actionButtonText}>Gerar Código de Exportação</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.actionButton, styles.excelButton]} onPress={exportToExcel}>
+            <MaterialIcons name="table-chart" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Exportar Excel (Por Ambiente)</Text>
           </TouchableOpacity>
         </View>
 
@@ -530,6 +551,9 @@ const styles = StyleSheet.create({
   },
   exportButton: {
     backgroundColor: '#059669',
+  },
+  excelButton: {
+    backgroundColor: '#DC2626',
   },
   actionButtonText: {
     color: 'white',
