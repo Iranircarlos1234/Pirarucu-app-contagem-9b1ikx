@@ -199,7 +199,7 @@ export default function RelatorioScreen() {
     setManualData(emptyRows);
   };
 
-  const updateRow = (index: number, field: keyof ManualCountData, value: string | number) => {
+    const updateRow = (index: number, field: keyof ManualCountData, value: string | number) => {
     const updatedData = [...manualData];
     
     if (field === 'contador') {
@@ -212,33 +212,17 @@ export default function RelatorioScreen() {
     }
     
     setManualData(updatedData);
-  };
-  const deleteRow = (index: number) => {
-    if (manualData.length <= 1) {
-      return;
-    }
-
-    const updatedData = manualData.filter((_, i) => i !== index);
-    setManualData(updatedData);
+    
+    // Auto-save when data changes
+    autoSaveReport(updatedData);
   };
 
-  const addNewRow = () => {
-    const newRow: ManualCountData = {
-      id: `row_${Date.now()}`,
-      contador: '',
-      bodecos: 0,
-      pirarucus: 0,
-      total: 0,
-    };
-    const updatedData = [...manualData, newRow];
-    setManualData(updatedData);
-  };
-  const saveReport = async () => {
+  const autoSaveReport = async (currentData: ManualCountData[]) => {
     if (!ambiente.trim() || !responsavel.trim()) {
       return;
     }
 
-    const filledRows = manualData.filter(row => row.contador.trim() !== '');
+    const filledRows = currentData.filter(row => row.contador.trim() !== '');
     
     if (filledRows.length === 0) {
       return;
@@ -265,14 +249,33 @@ export default function RelatorioScreen() {
       const updatedReports = [...savedReports, newReport];
       setSavedReports(updatedReports);
       await AsyncStorage.setItem('saved_reports', JSON.stringify(updatedReports));
-
-      // Iniciar novo registro
-      setAmbiente('');
-      setResponsavel('');
-      initializeEmptyRows();
     } catch (error) {
-      console.log('Erro ao salvar:', error);
+      console.log('Erro no auto-save:', error);
     }
+  };
+  const deleteRow = (index: number) => {
+    if (manualData.length <= 1) {
+      return;
+    }
+
+    const updatedData = manualData.filter((_, i) => i !== index);
+    setManualData(updatedData);
+  };
+
+  const addNewRow = () => {
+    const newRow: ManualCountData = {
+      id: `row_${Date.now()}`,
+      contador: '',
+      bodecos: 0,
+      pirarucus: 0,
+      total: 0,
+    };
+    const updatedData = [...manualData, newRow];
+    setManualData(updatedData);
+  };  const clearCurrentReport = () => {
+    setAmbiente('');
+    setResponsavel('');
+    initializeEmptyRows();
   };
   const exportReport = async () => {
     try {
@@ -483,11 +486,10 @@ export default function RelatorioScreen() {
             <MaterialIcons name="add" size={24} color="white" />
             <Text style={styles.addRowText}>Inserir Próxima Linha</Text>
           </TouchableOpacity>
-
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.saveButton} onPress={saveReport}>
-              <MaterialIcons name="save" size={24} color="white" />
-              <Text style={styles.saveButtonText}>Salvar</Text>
+            <TouchableOpacity style={styles.clearButton} onPress={clearCurrentReport}>
+              <MaterialIcons name="refresh" size={24} color="white" />
+              <Text style={styles.clearButtonText}>Novo Registro</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
@@ -781,10 +783,9 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
-  },
-  saveButton: {
+  },  clearButton: {
     flex: 1,
-    backgroundColor: '#059669',
+    backgroundColor: '#6B7280',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -796,7 +797,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  saveButtonText: {
+  clearButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',

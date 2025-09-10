@@ -9,7 +9,6 @@ import {
   TextInput,
   Platform,
   Modal,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -50,16 +49,6 @@ export default function SyncScreen() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [exportData, setExportData] = useState('');
-
-  // Web alert state
-  const [alertConfig, setAlertConfig] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onOk?: () => void;
-  }>({ visible: false, title: '', message: '' });
-
-    // Removed showAlert function
 
   useEffect(() => {
     loadData();
@@ -104,20 +93,136 @@ export default function SyncScreen() {
       setExportData(exportString);
       setShowExportModal(true);
     } catch (error) {
-      showAlert('Erro', 'Erro ao preparar dados para exportação.');
+      console.log('Erro ao preparar dados para exportação:', error);
     }
   };
-  const exportToExcel = async () => {
+
+  const exportExcelForSharing = async () => {
     try {
       if (sessions.length === 0) {
         return;
       }
 
-      await exportToCSV(sessions);
+      // Preparar dados para Excel
+      const excelData = prepareExcelData(sessions);
+      const csvContent = generateCSVContent(excelData);
+      const fileName = `Pirarucu_Relatorio_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      if (Platform.OS === 'web') {
+        // Web: Download direto
+        downloadFile(csvContent, fileName);
+      } else {
+        // Mobile: Compartilhar via apps nativos
+        const { Share } = require('react-native');
+        
+        // Salvar arquivo temporário
+        const FileSystem = require('expo-file-system');
+        const fileUri = FileSystem.documentDirectory + fileName;
+        await FileSystem.writeAsStringAsync(fileUri, csvContent);
+        
+        // Compartilhar via WhatsApp, Email, etc.
+        await Share.share({
+          title: 'Relatório de Contagem Pirarucu',
+          message: 'Segue relatório consolidado de contagem de pirarucu',
+          url: fileUri,
+        });
+      }
     } catch (error) {
       console.log('Erro na exportação Excel:', error);
     }
   };
+
+  const prepareExcelData = (sessions: CountSession[]) => {
+    const environmentGroups: { [key: string]: CountSession[] } = {};
+    
+    // Agrupar por ambiente
+    sessions.forEach(session => {
+      if (!environmentGroups[session.ambiente]) {
+        environmentGroups[session.ambiente] = [];
+      }
+      environmentGroups[session.ambiente].push(session);
+    });
+    
+    return Object.entries(environmentGroups).map(([ambiente, sessions]) => {
+      const contadores = sessions.map(session => ({
+        contador: session.contador,
+        setor: session.setor,
+        periodo: `${session.horaInicio} - ${session.horaFinal}`,
+        bodecos: session.totalBodeco,
+        pirarucus: session.totalPirarucu,
+        total: session.totalBodeco + session.totalPirarucu,
+        detalhes: session.contagens.map(c => ({
+          contagem: c.numero,
+          bodecos: c.bodeco,
+          pirarucus: c.pirarucu,
+          hora: c.timestamp,
+        }))
+      }));
+      
+      const totalBodecos = contadores.reduce((sum, c) => sum + c.bodecos, 0);
+      const totalPirarucus = contadores.reduce((sum, c) => sum + c.pirarucus, 0);
+      
+      return {
+        ambiente,
+        contadores,
+        totalBodecos,
+        totalPirarucus,
+        totalGeral: totalBodecos + totalPirarucus,
+      };
+    });
+  };
+
+  const generateCSVContent = (data: any[]) => {
+    let csv = '\ufeff'; // BOM para Excel UTF-8
+    csv += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
+    csv += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
+    
+    // Resumo Geral
+    csv += 'RESUMO GERAL POR AMBIENTE\n';
+    csv += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
+    
+    data.forEach(env => {
+      csv += `${env.ambiente};${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};${env.contadores.length}\n`;
+    });
+    
+    csv += '\n';
+    
+    // Detalhes por ambiente
+    data.forEach(env => {
+      csv += `\nDETALHES - ${env.ambiente}\n`;
+      csv += 'Contador;Setor;Periodo;Bodecos;Pirarucus;Total\n';
+      
+      env.contadores.forEach(contador => {
+        csv += `${contador.contador};${contador.setor};${contador.periodo};${contador.bodecos};${contador.pirarucus};${contador.total}\n`;
+      });
+      
+      csv += '\nCONTAGENS INDIVIDUAIS - ' + env.ambiente + '\n';
+      csv += 'Contador;Num Contagem;Bodecos;Pirarucus;Horario\n';
+      
+      env.contadores.forEach(contador => {
+        contador.detalhes.forEach(det => {
+          csv += `${contador.contador};${det.contagem};${det.bodecos};${det.pirarucus};${det.hora}\n`;
+        });
+      });
+      
+      csv += '\n';
+    });
+    
+    return csv;
+  };
+
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   const importDataFromCode = async () => {
     try {
       if (!importCode.trim()) {
@@ -149,7 +254,7 @@ export default function SyncScreen() {
     }
   };
 
-    const shareData = async () => {
+  const shareData = async () => {
     try {
       const allData = {
         contagens: sessions,
@@ -162,11 +267,9 @@ export default function SyncScreen() {
       
       if (Platform.OS === 'web') {
         try {
-          // Tenta usar a API de Clipboard moderna
           await navigator.clipboard.writeText(shareContent);
-          showAlert('Dados Copiados', 'Dados copiados para a área de transferência!');
+          console.log('Dados copiados para área de transferência');
         } catch (clipboardError) {
-          // Fallback para método alternativo
           try {
             const textArea = document.createElement('textarea');
             textArea.value = shareContent;
@@ -178,10 +281,9 @@ export default function SyncScreen() {
             textArea.setSelectionRange(0, 99999);
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            showAlert('Dados Copiados', 'Dados copiados para área de transferência! (método alternativo)');
+            console.log('Dados copiados (método alternativo)');
           } catch (fallbackError) {
-            // Se ambos falharem, mostrar dados para cópia manual
-            showAlert('Copiar Manualmente', `Copie este código manualmente:\n\n${shareContent.substring(0, 200)}...`);
+            console.log('Erro ao copiar dados');
           }
         }
       } else {
@@ -192,18 +294,16 @@ export default function SyncScreen() {
         });
       }
     } catch (error) {
-      showAlert('Erro', 'Erro ao compartilhar dados.');
+      console.log('Erro ao compartilhar dados:', error);
     }
   };
 
-    const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string) => {
     if (Platform.OS === 'web') {
       try {
-        // Tenta usar a API de Clipboard moderna
         await navigator.clipboard.writeText(text);
-        showAlert('Copiado!', 'Dados copiados para a área de transferência.');
+        console.log('Copiado para área de transferência');
       } catch (clipboardError) {
-        // Fallback para método alternativo
         try {
           const textArea = document.createElement('textarea');
           textArea.value = text;
@@ -215,21 +315,17 @@ export default function SyncScreen() {
           textArea.setSelectionRange(0, 99999);
           document.execCommand('copy');
           document.body.removeChild(textArea);
-          showAlert('Copiado!', 'Dados copiados para área de transferência! (método alternativo)');
+          console.log('Copiado (método alternativo)');
         } catch (fallbackError) {
-          // Se ambos falharem, mostrar para cópia manual
-          showAlert('Copiar Manualmente', `Selecione e copie este texto:\n\n${text.substring(0, 200)}...`);
+          console.log('Erro ao copiar');
         }
       }
-    } else {
-      // Para React Native mobile, seria necessário @react-native-clipboard/clipboard
-      showAlert('Copiar Manualmente', 'Selecione e copie o texto manualmente.');
     }
   };
+
   const simulateBluetoothScan = () => {
     setLoading(true);
     
-    // Simular dispositivos encontrados
     setTimeout(() => {
       const mockDevices: SyncDevice[] = [
         { id: '1', name: 'Contador João - Samsung A32', type: 'bluetooth', status: 'available' },
@@ -240,6 +336,7 @@ export default function SyncScreen() {
       setLoading(false);
     }, 2000);
   };
+
   const connectToDevice = (device: SyncDevice) => {
     console.log(`Tentativa de conexão com ${device.name}`);
   };
@@ -266,6 +363,32 @@ export default function SyncScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Excel Export Section */}
+        <View style={styles.excelSection}>
+          <Text style={styles.sectionTitle}>Exportar Relatório</Text>
+          
+          <TouchableOpacity style={styles.excelExportButton} onPress={exportExcelForSharing}>
+            <MaterialIcons name="table-chart" size={28} color="white" />
+            <Text style={styles.excelExportText}>Exportar Excel - Compartilhar</Text>
+            <Text style={styles.excelExportSubtext}>WhatsApp • Email • Drive</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.statsPreview}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{stats.contagens}</Text>
+              <Text style={styles.statLabel}>Contagens</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{stats.totalBodeco}</Text>
+              <Text style={styles.statLabel}>Bodecos</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{stats.totalPirarucu}</Text>
+              <Text style={styles.statLabel}>Pirarucus</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Sync Code */}
         <View style={styles.syncCodeSection}>
           <Text style={styles.sectionTitle}>Código do Dispositivo</Text>
@@ -278,25 +401,6 @@ export default function SyncScreen() {
           <Text style={styles.syncCodeDescription}>
             Compartilhe este código com outros contadores para sincronização
           </Text>
-        </View>
-
-        {/* Current Data Stats */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Dados Locais</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.contagens}</Text>
-              <Text style={styles.statLabel}>Contagens</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.totalBodeco}</Text>
-              <Text style={styles.statLabel}>Bodecos</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.totalPirarucu}</Text>
-              <Text style={styles.statLabel}>Pirarucus</Text>
-            </View>
-          </View>
         </View>
 
         {/* Quick Actions */}
@@ -316,11 +420,6 @@ export default function SyncScreen() {
           <TouchableOpacity style={[styles.actionButton, styles.exportButton]} onPress={prepareExportData}>
             <MaterialIcons name="code" size={24} color="white" />
             <Text style={styles.actionButtonText}>Gerar Código de Exportação</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.actionButton, styles.excelButton]} onPress={exportToExcel}>
-            <MaterialIcons name="table-chart" size={24} color="white" />
-            <Text style={styles.actionButtonText}>Exportar Excel (Por Ambiente)</Text>
           </TouchableOpacity>
         </View>
 
@@ -436,7 +535,6 @@ export default function SyncScreen() {
           </View>
         </View>
       </Modal>
-      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }
@@ -459,6 +557,63 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
     padding: 16,
+  },
+  excelSection: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  excelExportButton: {
+    backgroundColor: '#DC2626',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  excelExportText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  excelExportSubtext: {
+    color: '#FEE2E2',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  statsPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 16,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginTop: 4,
   },
   syncCodeSection: {
     backgroundColor: 'white',
@@ -501,40 +656,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
   },
-  statsSection: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
-    marginTop: 4,
-  },
   actionsSection: {
     marginBottom: 16,
   },
@@ -554,9 +675,6 @@ const styles = StyleSheet.create({
   },
   exportButton: {
     backgroundColor: '#059669',
-  },
-  excelButton: {
-    backgroundColor: '#DC2626',
   },
   actionButtonText: {
     color: 'white',
@@ -722,35 +840,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     marginLeft: 8,
-  },
-  alertModalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 8,
-    minWidth: 280,
-    maxWidth: 400,
-  },
-  alertModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#1F2937',
-  },
-  alertModalMessage: {
-    fontSize: 16,
-    marginBottom: 20,
-    color: '#4B5563',
-    lineHeight: 22,
-  },
-  alertModalButton: {
-    backgroundColor: '#2563EB',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  alertModalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
 });
