@@ -63,13 +63,7 @@ export default function CountingScreen() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showAlert = (title: string, message: string, onOk?: () => void) => {
-    if (Platform.OS === 'web') {
-      setAlertConfig({ visible: true, title, message, onOk });
-    } else {
-      Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
-    }
-  };
+    // Removed showAlert function
 
   useEffect(() => {
     generateEmissorCode();
@@ -101,19 +95,16 @@ export default function CountingScreen() {
     const code = Date.now().toString(36).toUpperCase();
     setEmissorCode(code);
   };
-
   const receiveData = async () => {
     if (!receptorData.trim()) {
-      showAlert('Código Necessário', 'Digite o código de dados para receber.');
       return;
     }
 
     try {
       const receivedData = JSON.parse(receptorData);
-      showAlert('Dados Recebidos', `Dados processados com sucesso!\nCódigo: ${receptorData.slice(0, 8)}...`);
       setReceptorData('');
     } catch (error) {
-      showAlert('Erro', 'Código inválido ou corrompido.');
+      console.log('Erro ao receber dados:', error);
     }
   };
 
@@ -162,10 +153,8 @@ export default function CountingScreen() {
       showAlert('Erro', 'Erro ao preparar dados para envio.');
     }
   };
-
   const startCounting = () => {
     if (!ambiente || !setor || !contador) {
-      showAlert('Campos Obrigatórios', 'Preencha todos os campos antes de iniciar.');
       return;
     }
 
@@ -175,10 +164,8 @@ export default function CountingScreen() {
     setTimeLeft(1200);
     setContagens([]);
   };
-
   const addCount = () => {
     if (!isActive) {
-      showAlert('Contagem Não Iniciada', 'Inicie a contagem primeiro.');
       return;
     }
 
@@ -198,10 +185,7 @@ export default function CountingScreen() {
     
     // Auto-save
     saveSession(updatedContagens);
-    
-    showAlert('Contagem Registrada', `Contagem ${currentCount} salva: ${currentBodeco} bodecos, ${currentPirarucu} pirarucus`);
   };
-
   const finishCurrentCount = async () => {
     if (contagens.length === 0) {
       setIsActive(false);
@@ -233,11 +217,6 @@ export default function CountingScreen() {
     setIsActive(false);
     setTimeLeft(1200);
     setCurrentCount(currentCount + 1);
-    
-    showAlert(
-      'Contagem Finalizada e Salva Automaticamente', 
-      `Contagem ${currentCount} concluída e salva!\nPeríodo: ${horaInicio} - ${finalTime}\nTotal: ${totalBodeco} bodecos, ${totalPirarucu} pirarucus\n\nClique em "Iniciar Contagem" para nova contagem.`
-    );
   };
 
   const saveSession = async (currentContagens: any[], isFinal = false) => {
@@ -268,22 +247,15 @@ export default function CountingScreen() {
       console.log('Erro ao salvar:', error);
     }
   };
-
   const resetSession = () => {
-    showAlert(
-      'Confirmar Reset',
-      'Deseja realmente reiniciar a contagem? Todos os dados não salvos serão perdidos.',
-      () => {
-        setIsActive(false);
-        setTimeLeft(1200);
-        setCurrentCount(1);
-        setContagens([]);
-        setCurrentBodeco(0);
-        setCurrentPirarucu(0);
-        setHoraInicio('');
-        setHoraFinal('');
-      }
-    );
+    setIsActive(false);
+    setTimeLeft(1200);
+    setCurrentCount(1);
+    setContagens([]);
+    setCurrentBodeco(0);
+    setCurrentPirarucu(0);
+    setHoraInicio('');
+    setHoraFinal('');
   };
 
   const totalBodeco = contagens.reduce((sum, c) => sum + c.bodeco, 0);
@@ -479,27 +451,7 @@ export default function CountingScreen() {
           </View>
         )}
       </ScrollView>
-
-      {/* Web Alert Modal */}
-      {Platform.OS === 'web' && (
-        <Modal visible={alertConfig.visible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{alertConfig.title}</Text>
-              <Text style={styles.modalMessage}>{alertConfig.message}</Text>
-              <TouchableOpacity 
-                style={styles.modalButton}
-                onPress={() => {
-                  alertConfig.onOk?.();
-                  setAlertConfig(prev => ({ ...prev, visible: false }));
-                }}
-              >
-                <Text style={styles.modalButtonText}>OK</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
+      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }

@@ -70,14 +70,7 @@ export default function RelatorioScreen() {
     onOk?: () => void;
   }>({ visible: false, title: '', message: '' });
 
-  const showAlert = (title: string, message: string, onOk?: () => void) => {
-    if (Platform.OS === 'web') {
-      setAlertConfig({ visible: true, title, message, onOk });
-    } else {
-      const { Alert } = require('react-native');
-      Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
-    }
-  };
+    // Removed showAlert function
 
     useEffect(() => {
     loadData();
@@ -220,10 +213,8 @@ export default function RelatorioScreen() {
     
     setManualData(updatedData);
   };
-
   const deleteRow = (index: number) => {
     if (manualData.length <= 1) {
-      showAlert('Não é possível excluir', 'Deve manter pelo menos uma linha na tabela.');
       return;
     }
 
@@ -242,17 +233,14 @@ export default function RelatorioScreen() {
     const updatedData = [...manualData, newRow];
     setManualData(updatedData);
   };
-
   const saveReport = async () => {
     if (!ambiente.trim() || !responsavel.trim()) {
-      showAlert('Campos Obrigatórios', 'Preencha o Nome do Ambiente e Contador Responsável.');
       return;
     }
 
     const filledRows = manualData.filter(row => row.contador.trim() !== '');
     
     if (filledRows.length === 0) {
-      showAlert('Sem Dados', 'Preencha pelo menos um registro na tabela.');
       return;
     }
 
@@ -278,24 +266,19 @@ export default function RelatorioScreen() {
       setSavedReports(updatedReports);
       await AsyncStorage.setItem('saved_reports', JSON.stringify(updatedReports));
 
-      showAlert('Relatório Salvo!', `Relatório "${ambiente}" salvo com sucesso!\nTotal: ${filledRows.length} contadores`, () => {
-        // Iniciar novo registro
-        setAmbiente('');
-        setResponsavel('');
-        initializeEmptyRows();
-      });
+      // Iniciar novo registro
+      setAmbiente('');
+      setResponsavel('');
+      initializeEmptyRows();
     } catch (error) {
-      showAlert('Erro', 'Erro ao salvar relatório.');
       console.log('Erro ao salvar:', error);
     }
   };
-
   const exportReport = async () => {
     try {
       const filledRows = manualData.filter(row => row.contador.trim() !== '');
       
       if (filledRows.length === 0) {
-        showAlert('Sem Dados', 'Não há dados preenchidos para exportar.');
         return;
       }
 
@@ -303,7 +286,6 @@ export default function RelatorioScreen() {
       
       if (Platform.OS === 'web') {
         downloadFile(exportContent, `relatorio_${ambiente}_${new Date().toISOString().split('T')[0]}.txt`);
-        showAlert('Exportação Concluída', 'Relatório baixado com sucesso!');
       } else {
         const { Share } = require('react-native');
         await Share.share({
@@ -312,7 +294,6 @@ export default function RelatorioScreen() {
         });
       }
     } catch (error) {
-      showAlert('Erro na Exportação', 'Não foi possível exportar o relatório.');
       console.log('Erro na exportação:', error);
     }
   };
@@ -590,27 +571,7 @@ export default function RelatorioScreen() {
           </View>
         )}
       </ScrollView>
-
-      {/* Web Alert Modal */}
-      {Platform.OS === 'web' && (
-        <Modal visible={alertConfig.visible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{alertConfig.title}</Text>
-              <Text style={styles.modalMessage}>{alertConfig.message}</Text>
-              <TouchableOpacity 
-                style={styles.modalButton}
-                onPress={() => {
-                  alertConfig.onOk?.();
-                  setAlertConfig(prev => ({ ...prev, visible: false }));
-                }}
-              >
-                <Text style={styles.modalButtonText}>OK</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
+      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }

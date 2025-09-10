@@ -59,13 +59,7 @@ export default function SyncScreen() {
     onOk?: () => void;
   }>({ visible: false, title: '', message: '' });
 
-  const showAlert = (title: string, message: string, onOk?: () => void) => {
-    if (Platform.OS === 'web') {
-      setAlertConfig({ visible: true, title, message, onOk });
-    } else {
-      Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
-    }
-  };
+    // Removed showAlert function
 
   useEffect(() => {
     loadData();
@@ -113,33 +107,26 @@ export default function SyncScreen() {
       showAlert('Erro', 'Erro ao preparar dados para exportação.');
     }
   };
-
   const exportToExcel = async () => {
     try {
       if (sessions.length === 0) {
-        showAlert('Sem Dados', 'Não há contagens registradas para exportar.');
         return;
       }
 
       await exportToCSV(sessions);
-      showAlert('Exportação Concluída', 'Dados exportados para Excel com sucesso!');
     } catch (error) {
-      showAlert('Erro na Exportação', 'Não foi possível exportar os dados para Excel.');
       console.log('Erro na exportação Excel:', error);
     }
   };
-
   const importDataFromCode = async () => {
     try {
       if (!importCode.trim()) {
-        showAlert('Código Necessário', 'Digite o código de importação.');
         return;
       }
 
       const importedData = JSON.parse(importCode);
       
       if (!importedData.contagens || !Array.isArray(importedData.contagens)) {
-        showAlert('Dados Inválidos', 'Formato de dados não reconhecido.');
         return;
       }
 
@@ -157,10 +144,8 @@ export default function SyncScreen() {
       setSessions(mergedSessions);
       setImportCode('');
       setShowImportModal(false);
-      
-      showAlert('Importação Concluída', `${newSessions.length} contagens importadas com sucesso!`);
     } catch (error) {
-      showAlert('Erro na Importação', 'Código inválido ou corrompido.');
+      console.log('Erro na importação:', error);
     }
   };
 
@@ -241,7 +226,6 @@ export default function SyncScreen() {
       showAlert('Copiar Manualmente', 'Selecione e copie o texto manualmente.');
     }
   };
-
   const simulateBluetoothScan = () => {
     setLoading(true);
     
@@ -254,13 +238,10 @@ export default function SyncScreen() {
       ];
       setDevices(mockDevices);
       setLoading(false);
-      showAlert('Busca Concluída', `${mockDevices.length} dispositivos encontrados.`);
     }, 2000);
   };
-
   const connectToDevice = (device: SyncDevice) => {
-    showAlert('Funcionalidade em Desenvolvimento', 
-      `Conexão com ${device.name} será implementada em breve.\n\nPor enquanto, use a função de exportar/importar dados manualmente.`);
+    console.log(`Tentativa de conexão com ${device.name}`);
   };
 
   const getTotalStats = () => {
@@ -455,27 +436,7 @@ export default function SyncScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Web Alert Modal */}
-      {Platform.OS === 'web' && (
-        <Modal visible={alertConfig.visible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.alertModalContent}>
-              <Text style={styles.alertModalTitle}>{alertConfig.title}</Text>
-              <Text style={styles.alertModalMessage}>{alertConfig.message}</Text>
-              <TouchableOpacity 
-                style={styles.alertModalButton}
-                onPress={() => {
-                  alertConfig.onOk?.();
-                  setAlertConfig(prev => ({ ...prev, visible: false }));
-                }}
-              >
-                <Text style={styles.alertModalButtonText}>OK</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
+      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }

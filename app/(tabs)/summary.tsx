@@ -45,13 +45,7 @@ export default function SummaryScreen() {
     onOk?: () => void;
   }>({ visible: false, title: '', message: '' });
 
-  const showAlert = (title: string, message: string, onOk?: () => void) => {
-    if (Platform.OS === 'web') {
-      setAlertConfig({ visible: true, title, message, onOk });
-    } else {
-      Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
-    }
-  };
+    // Removed showAlert function
 
     useEffect(() => {
     loadSessions();
@@ -124,37 +118,26 @@ export default function SummaryScreen() {
       };
     });
   };
-
-  const clearAllData = () => {
-    showAlert(
-      'Confirmar Exclusão',
-      'Deseja realmente excluir todos os dados salvos? Esta ação não pode ser desfeita.',
-      async () => {
-        try {
-          await AsyncStorage.removeItem('pirarucu_sessions');
-          setSessions([]);
-          showAlert('Dados Excluídos', 'Todos os dados foram removidos com sucesso.');
-        } catch (error) {
-          showAlert('Erro', 'Erro ao excluir os dados.');
-        }
-      }
-    );
+  const clearAllData = async () => {
+    try {
+      await AsyncStorage.removeItem('pirarucu_sessions');
+      setSessions([]);
+    } catch (error) {
+      console.log('Erro ao excluir dados:', error);
+    }
   };
-
-    const exportData = async () => {
+  const exportData = async () => {
     try {
       if (sessions.length === 0) {
-        showAlert('Sem Dados', 'Não há dados para exportar.');
         return;
       }
 
       // Preparar dados para exportação
       const exportContent = generateExportContent();
       
-            if (Platform.OS === 'web') {
+      if (Platform.OS === 'web') {
         // Para web, baixar como arquivo
         downloadFile(exportContent, `pirarucu_contagens_${new Date().toISOString().split('T')[0]}.txt`);
-        showAlert('Exportação Concluída', 'Arquivo baixado com sucesso!');
       } else {
         // Para mobile, compartilhar via apps nativos
         const { Share } = require('react-native');
@@ -164,7 +147,6 @@ export default function SummaryScreen() {
         });
       }
     } catch (error) {
-      showAlert('Erro na Exportação', 'Não foi possível exportar os dados.');
       console.log('Erro na exportação:', error);
     }
   };
@@ -444,27 +426,7 @@ export default function SummaryScreen() {
           </View>
         )}
       </ScrollView>
-
-      {/* Web Alert Modal */}
-      {Platform.OS === 'web' && (
-        <Modal visible={alertConfig.visible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{alertConfig.title}</Text>
-              <Text style={styles.modalMessage}>{alertConfig.message}</Text>
-              <TouchableOpacity 
-                style={styles.modalButton}
-                onPress={() => {
-                  alertConfig.onOk?.();
-                  setAlertConfig(prev => ({ ...prev, visible: false }));
-                }}
-              >
-                <Text style={styles.modalButtonText}>OK</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
+      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }
