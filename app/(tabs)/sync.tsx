@@ -164,7 +164,7 @@ export default function SyncScreen() {
     }
   };
 
-  const shareData = async () => {
+    const shareData = async () => {
     try {
       const allData = {
         contagens: sessions,
@@ -176,8 +176,29 @@ export default function SyncScreen() {
       const shareContent = JSON.stringify(allData);
       
       if (Platform.OS === 'web') {
-        navigator.clipboard.writeText(shareContent);
-        showAlert('Dados Copiados', 'Dados copiados para a área de transferência!');
+        try {
+          // Tenta usar a API de Clipboard moderna
+          await navigator.clipboard.writeText(shareContent);
+          showAlert('Dados Copiados', 'Dados copiados para a área de transferência!');
+        } catch (clipboardError) {
+          // Fallback para método alternativo
+          try {
+            const textArea = document.createElement('textarea');
+            textArea.value = shareContent;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showAlert('Dados Copiados', 'Dados copiados para área de transferência! (método alternativo)');
+          } catch (fallbackError) {
+            // Se ambos falharem, mostrar dados para cópia manual
+            showAlert('Copiar Manualmente', `Copie este código manualmente:\n\n${shareContent.substring(0, 200)}...`);
+          }
+        }
       } else {
         const { Share } = require('react-native');
         await Share.share({
@@ -190,10 +211,31 @@ export default function SyncScreen() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
+    const copyToClipboard = async (text: string) => {
     if (Platform.OS === 'web') {
-      navigator.clipboard.writeText(text);
-      showAlert('Copiado!', 'Dados copiados para a área de transferência.');
+      try {
+        // Tenta usar a API de Clipboard moderna
+        await navigator.clipboard.writeText(text);
+        showAlert('Copiado!', 'Dados copiados para a área de transferência.');
+      } catch (clipboardError) {
+        // Fallback para método alternativo
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = text;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-9999px';
+          textArea.style.top = '-9999px';
+          document.body.appendChild(textArea);
+          textArea.select();
+          textArea.setSelectionRange(0, 99999);
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          showAlert('Copiado!', 'Dados copiados para área de transferência! (método alternativo)');
+        } catch (fallbackError) {
+          // Se ambos falharem, mostrar para cópia manual
+          showAlert('Copiar Manualmente', `Selecione e copie este texto:\n\n${text.substring(0, 200)}...`);
+        }
+      }
     } else {
       // Para React Native mobile, seria necessário @react-native-clipboard/clipboard
       showAlert('Copiar Manualmente', 'Selecione e copie o texto manualmente.');

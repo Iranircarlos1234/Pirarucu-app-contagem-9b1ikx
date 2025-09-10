@@ -117,7 +117,7 @@ export default function CountingScreen() {
     }
   };
 
-  const sendData = async () => {
+    const sendData = async () => {
     try {
       const dataToSend = {
         ambiente,
@@ -130,8 +130,29 @@ export default function CountingScreen() {
       const dataString = JSON.stringify(dataToSend);
       
       if (Platform.OS === 'web') {
-        navigator.clipboard.writeText(dataString);
-        showAlert('Dados Copiados', 'Dados copiados para área de transferência!');
+        try {
+          // Tenta usar a API de Clipboard moderna
+          await navigator.clipboard.writeText(dataString);
+          showAlert('Dados Copiados', 'Dados copiados para área de transferência!');
+        } catch (clipboardError) {
+          // Fallback para método alternativo
+          try {
+            const textArea = document.createElement('textarea');
+            textArea.value = dataString;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showAlert('Dados Copiados', 'Dados copiados para área de transferência! (método alternativo)');
+          } catch (fallbackError) {
+            // Se ambos falharem, mostrar dados para cópia manual
+            showAlert('Copiar Manualmente', `Copie este código manualmente:\n\n${dataString.substring(0, 200)}...`);
+          }
+        }
       } else {
         showAlert('Dados Preparados', `Código: ${emissorCode}\nDados prontos para envio.`);
       }

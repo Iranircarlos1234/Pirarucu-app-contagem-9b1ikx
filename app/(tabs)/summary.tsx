@@ -151,7 +151,7 @@ export default function SummaryScreen() {
       // Preparar dados para exportação
       const exportContent = generateExportContent();
       
-      if (Platform.OS === 'web') {
+            if (Platform.OS === 'web') {
         // Para web, baixar como arquivo
         downloadFile(exportContent, `pirarucu_contagens_${new Date().toISOString().split('T')[0]}.txt`);
         showAlert('Exportação Concluída', 'Arquivo baixado com sucesso!');
