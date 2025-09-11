@@ -359,10 +359,10 @@ export default function SyncScreen() {
             <Text style={styles.excelExportSubtext}>Planilha Excel • WhatsApp • Email</Text>
           </TouchableOpacity>
           
-          <View style={styles.exportPreview}>
+                    <View style={styles.exportPreview}>
             <Text style={styles.previewTitle}>Colunas da Planilha:</Text>
             <Text style={styles.previewColumns}>
-              Data • Ambiente • Nome do Contador • Hora Inicial • Hora Final • 
+              Ordem de Contagem • Data • Ambiente • Nome do Contador • Hora Inicial • Hora Final • 
               Total Minutos • Registro Contagem • Pirarucu • Bodeco • Total
             </Text>
           </View>

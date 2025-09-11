@@ -19,6 +19,7 @@ interface CountSession {
 }
 
 export interface ExcelRow {
+  ordemContagem: number;
   data: string;
   ambiente: string;
   nomeContador: string;
@@ -62,7 +63,6 @@ const calculateMinutes = (horaInicio: string, horaFinal: string): number => {
     return 0;
   }
 };
-
 export const prepareExcelData = (sessions: CountSession[]): ExcelRow[] => {
   const rows: ExcelRow[] = [];
   const today = new Date().toLocaleDateString('pt-BR');
@@ -72,6 +72,7 @@ export const prepareExcelData = (sessions: CountSession[]): ExcelRow[] => {
     
     session.contagens.forEach(contagem => {
       rows.push({
+        ordemContagem: 0, // Será preenchido após ordenação
         data: today,
         ambiente: cleanText(session.ambiente),
         nomeContador: cleanText(session.contador),
@@ -86,20 +87,27 @@ export const prepareExcelData = (sessions: CountSession[]): ExcelRow[] => {
     });
   });
 
-  return rows.sort((a, b) => {
+  // Ordenar primeiro
+  const sortedRows = rows.sort((a, b) => {
     // Ordenar por ambiente, depois contador, depois registro
     if (a.ambiente !== b.ambiente) return a.ambiente.localeCompare(b.ambiente);
     if (a.nomeContador !== b.nomeContador) return a.nomeContador.localeCompare(b.nomeContador);
     return a.registroContagem - b.registroContagem;
   });
-};
 
+  // Adicionar ordem sequencial
+  return sortedRows.map((row, index) => ({
+    ...row,
+    ordemContagem: index + 1
+  }));
+};
 export const generateXLSXContent = (data: ExcelRow[]): string => {
   // Criar CSV formatado para Excel com encoding UTF-8 BOM
   let content = '\ufeff'; // BOM para Excel UTF-8
   
   // Cabeçalhos das colunas
   const headers = [
+    'Ordem de Contagem',
     'Data',
     'Ambiente', 
     'Nome do Contador',
@@ -117,6 +125,7 @@ export const generateXLSXContent = (data: ExcelRow[]): string => {
   // Dados das linhas
   data.forEach(row => {
     const values = [
+      row.ordemContagem.toString(),
       row.data,
       row.ambiente,
       row.nomeContador,
