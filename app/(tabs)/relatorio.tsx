@@ -117,48 +117,29 @@ export default function RelatorioScreen() {
       setLoading(false);
     }
   };
-
   const prePopulateFromContagens = async (sessions: CountSession[]) => {
     if (sessions.length === 0) {
       initializeEmptyRows();
       return;
     }
 
-    // Agrupar contagens por contador
-    const contadorTotals = sessions.reduce((acc, session) => {
-      const key = session.contador;
-      if (!acc[key]) {
-        acc[key] = {
-          contador: session.contador,
-          ambiente: session.ambiente,
-          bodecos: 0,
-          pirarucus: 0,
-        };
-      }
-      acc[key].bodecos += session.totalBodeco;
-      acc[key].pirarucus += session.totalPirarucu;
-      return acc;
-    }, {} as Record<string, any>);
+    // Mostrar todas as contagens individuais das sessões
+    const allContagens: ManualCountData[] = [];
 
-    // Converter para array e criar dados pré-populados
-    const contadorData = Object.values(contadorTotals);
-    const initialRows: ManualCountData[] = [];
-
-    // Pré-popular com dados dos contadores
-    contadorData.forEach((data: any, index) => {
-      initialRows.push({
-        id: `row_${index}`,
-        contador: data.contador,
-        bodecos: data.bodecos,
-        pirarucus: data.pirarucus,
-        total: data.bodecos + data.pirarucus,
+    sessions.forEach((session, sessionIndex) => {
+      allContagens.push({
+        id: `session_${sessionIndex}`,
+        contador: session.contador,
+        bodecos: session.totalBodeco,
+        pirarucus: session.totalPirarucu,
+        total: session.totalBodeco + session.totalPirarucu,
       });
     });
 
-        // Completar com linhas vazias até 3
-    while (initialRows.length < 3) {
-      initialRows.push({
-        id: `row_${initialRows.length}`,
+    // Adicionar 3 linhas vazias para edição manual
+    for (let i = 0; i < 3; i++) {
+      allContagens.push({
+        id: `manual_${i}`,
         contador: '',
         bodecos: 0,
         pirarucus: 0,
@@ -166,7 +147,7 @@ export default function RelatorioScreen() {
       });
     }
 
-    setManualData(initialRows);
+    setManualData(allContagens);
 
         // Pré-popular ambiente - usar o último ambiente ou o mais comum
     const ambientes = [...new Set(sessions.map(s => s.ambiente))];
