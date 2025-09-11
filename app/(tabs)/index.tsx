@@ -53,17 +53,7 @@ export default function CountingScreen() {
   const [receptorData, setReceptorData] = useState('');
   const [emissorCode, setEmissorCode] = useState('');
 
-  // Web alert state
-  const [alertConfig, setAlertConfig] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onOk?: () => void;
-  }>({ visible: false, title: '', message: '' });
-
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-    // Removed showAlert function
 
   useEffect(() => {
     generateEmissorCode();
@@ -95,6 +85,7 @@ export default function CountingScreen() {
     const code = Date.now().toString(36).toUpperCase();
     setEmissorCode(code);
   };
+
   const receiveData = async () => {
     if (!receptorData.trim()) {
       return;
@@ -108,7 +99,7 @@ export default function CountingScreen() {
     }
   };
 
-    const sendData = async () => {
+  const sendData = async () => {
     try {
       const dataToSend = {
         ambiente,
@@ -124,7 +115,7 @@ export default function CountingScreen() {
         try {
           // Tenta usar a API de Clipboard moderna
           await navigator.clipboard.writeText(dataString);
-          showAlert('Dados Copiados', 'Dados copiados para área de transferência!');
+          console.log('Dados copiados para área de transferência!');
         } catch (clipboardError) {
           // Fallback para método alternativo
           try {
@@ -138,21 +129,29 @@ export default function CountingScreen() {
             textArea.setSelectionRange(0, 99999);
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            showAlert('Dados Copiados', 'Dados copiados para área de transferência! (método alternativo)');
+            console.log('Dados copiados para área de transferência! (método alternativo)');
           } catch (fallbackError) {
             // Se ambos falharem, mostrar dados para cópia manual
-            showAlert('Copiar Manualmente', `Copie este código manualmente:\n\n${dataString.substring(0, 200)}...`);
+            console.log(`Copie este código manualmente:\n\n${dataString.substring(0, 200)}...`);
           }
         }
       } else {
-        showAlert('Dados Preparados', `Código: ${emissorCode}\nDados prontos para envio.`);
+        console.log(`Código: ${emissorCode}\nDados prontos para envio.`);
       }
       
       generateEmissorCode();
     } catch (error) {
-      showAlert('Erro', 'Erro ao preparar dados para envio.');
+      console.log('Erro ao preparar dados para envio.');
     }
   };
+
+  const syncViaBluetooth = () => {
+    if (isActive) {
+      return;
+    }
+    console.log('Iniciando sincronização via Bluetooth...');
+  };
+
   const startCounting = () => {
     if (!ambiente || !setor || !contador) {
       return;
@@ -164,6 +163,7 @@ export default function CountingScreen() {
     setTimeLeft(1200);
     setContagens([]);
   };
+
   const addCount = () => {
     if (!isActive) {
       return;
@@ -186,6 +186,7 @@ export default function CountingScreen() {
     // Auto-save
     saveSession(updatedContagens);
   };
+
   const finishCurrentCount = async () => {
     if (contagens.length === 0) {
       setIsActive(false);
@@ -247,6 +248,7 @@ export default function CountingScreen() {
       console.log('Erro ao salvar:', error);
     }
   };
+
   const resetSession = () => {
     setIsActive(false);
     setTimeLeft(1200);
@@ -345,6 +347,16 @@ export default function CountingScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Bluetooth Sync Button */}
+          <TouchableOpacity 
+            style={[styles.bluetoothButton, isActive && styles.disabledButton]} 
+            onPress={syncViaBluetooth}
+            disabled={isActive}
+          >
+            <MaterialIcons name="bluetooth" size={24} color="white" />
+            <Text style={styles.bluetoothButtonText}>Sincronizar via Bluetooth</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Timer Section */}
@@ -451,7 +463,6 @@ export default function CountingScreen() {
           </View>
         )}
       </ScrollView>
-      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }
@@ -513,6 +524,7 @@ const styles = StyleSheet.create({
   syncRow: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 16,
   },
   syncItem: {
     flex: 1,
@@ -580,6 +592,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  bluetoothButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 8,
+  },
+  bluetoothButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   timerSection: {
     backgroundColor: '#EFF6FF',
@@ -777,41 +803,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
     fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 8,
-    minWidth: 280,
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#1F2937',
-  },
-  modalMessage: {
-    fontSize: 16,
-    marginBottom: 20,
-    color: '#4B5563',
-    lineHeight: 22,
-  },
-  modalButton: {
-    backgroundColor: '#2563EB',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
 });
