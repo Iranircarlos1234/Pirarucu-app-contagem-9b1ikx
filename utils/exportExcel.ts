@@ -18,107 +18,138 @@ interface CountSession {
   totalPirarucu: number;
 }
 
-export interface ExportData {
+export interface ExcelRow {
+  data: string;
   ambiente: string;
-  contadores: Array<{
-    contador: string;
-    setor: string;
-    periodo: string;
-    bodecos: number;
-    pirarucus: number;
-    total: number;
-    detalhes: Array<{
-      contagem: number;
-      bodecos: number;
-      pirarucus: number;
-      hora: string;
-    }>;
-  }>;
-  totalBodecos: number;
-  totalPirarucus: number;
-  totalGeral: number;
+  nomeContador: string;
+  horaInicial: string;
+  horaFinal: string;
+  totalMinutos: number;
+  registroContagem: number;
+  pirarucu: number;
+  bodeco: number;
+  total: number;
 }
 
-export const prepareDataByEnvironment = (sessions: CountSession[]): ExportData[] => {
-  const environmentGroups: { [key: string]: CountSession[] } = {};
-  
-  // Agrupar por ambiente
-  sessions.forEach(session => {
-    if (!environmentGroups[session.ambiente]) {
-      environmentGroups[session.ambiente] = [];
-    }
-    environmentGroups[session.ambiente].push(session);
-  });
-  
-  // Processar cada ambiente
-  return Object.entries(environmentGroups).map(([ambiente, sessions]) => {
-    const contadores = sessions.map(session => ({
-      contador: session.contador,
-      setor: session.setor,
-      periodo: `${session.horaInicio} - ${session.horaFinal}`,
-      bodecos: session.totalBodeco,
-      pirarucus: session.totalPirarucu,
-      total: session.totalBodeco + session.totalPirarucu,
-      detalhes: session.contagens.map(c => ({
-        contagem: c.numero,
-        bodecos: c.bodeco,
-        pirarucus: c.pirarucu,
-        hora: c.timestamp,
-      }))
-    }));
-    
-    const totalBodecos = contadores.reduce((sum, c) => sum + c.bodecos, 0);
-    const totalPirarucus = contadores.reduce((sum, c) => sum + c.pirarucus, 0);
-    
-    return {
-      ambiente,
-      contadores,
-      totalBodecos,
-      totalPirarucus,
-      totalGeral: totalBodecos + totalPirarucus,
-    };
-  });
+const cleanText = (text: string): string => {
+  return text
+    .replace(/[^\w\s]/g, '') // Remove símbolos, mantém letras, números e espaços
+    .replace(/\s+/g, ' ')    // Remove espaços duplos
+    .trim();
 };
 
-export const generateCSVContent = (data: ExportData[]): string => {
-  let csv = 'RELATORIO CONSOLIDADO DE CONTAGEM DE PIRARUCU\n\n';
-  
-  data.forEach(envData => {
-    csv += `\n=== AMBIENTE: ${envData.ambiente} ===\n`;
-    csv += `Total Bodecos: ${envData.totalBodecos}\n`;
-    csv += `Total Pirarucus: ${envData.totalPirarucus}\n`;
-    csv += `Total Geral: ${envData.totalGeral}\n\n`;
+const calculateMinutes = (horaInicio: string, horaFinal: string): number => {
+  try {
+    const parseTime = (timeStr: string): Date => {
+      const [time] = timeStr.split(' ');
+      const [hours, minutes, seconds] = time.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, seconds || 0, 0);
+      return date;
+    };
+
+    const inicio = parseTime(horaInicio);
+    const final = parseTime(horaFinal);
     
-    csv += 'CONTADOR,SETOR,PERIODO,BODECOS,PIRARUCUS,TOTAL\n';
+    let diffMs = final.getTime() - inicio.getTime();
+    if (diffMs < 0) {
+      // Se hora final é menor que inicial, assumir que passou da meia-noite
+      diffMs += 24 * 60 * 60 * 1000;
+    }
     
-    envData.contadores.forEach(contador => {
-      csv += `"${contador.contador}","${contador.setor}","${contador.periodo}",${contador.bodecos},${contador.pirarucus},${contador.total}\n`;
-    });
+    return Math.round(diffMs / (1000 * 60)); // Converter para minutos
+  } catch (error) {
+    return 0;
+  }
+};
+
+export const prepareExcelData = (sessions: CountSession[]): ExcelRow[] => {
+  const rows: ExcelRow[] = [];
+  const today = new Date().toLocaleDateString('pt-BR');
+
+  sessions.forEach(session => {
+    const totalMinutos = calculateMinutes(session.horaInicio, session.horaFinal);
     
-    csv += '\n--- DETALHES DAS CONTAGENS ---\n';
-    csv += 'CONTADOR,CONTAGEM_NUM,BODECOS,PIRARUCUS,HORA\n';
-    
-    envData.contadores.forEach(contador => {
-      contador.detalhes.forEach(detalhe => {
-        csv += `"${contador.contador}",${detalhe.contagem},${detalhe.bodecos},${detalhe.pirarucus},"${detalhe.hora}"\n`;
+    session.contagens.forEach(contagem => {
+      rows.push({
+        data: today,
+        ambiente: cleanText(session.ambiente),
+        nomeContador: cleanText(session.contador),
+        horaInicial: session.horaInicio.split(' ')[0] || session.horaInicio, // Apenas hora, sem data
+        horaFinal: session.horaFinal.split(' ')[0] || session.horaFinal,
+        totalMinutos: totalMinutos,
+        registroContagem: contagem.numero,
+        pirarucu: contagem.pirarucu,
+        bodeco: contagem.bodeco,
+        total: contagem.pirarucu + contagem.bodeco
       });
     });
-    
-    csv += '\n' + '='.repeat(50) + '\n';
   });
-  
-  return csv;
+
+  return rows.sort((a, b) => {
+    // Ordenar por ambiente, depois contador, depois registro
+    if (a.ambiente !== b.ambiente) return a.ambiente.localeCompare(b.ambiente);
+    if (a.nomeContador !== b.nomeContador) return a.nomeContador.localeCompare(b.nomeContador);
+    return a.registroContagem - b.registroContagem;
+  });
 };
 
-export const exportToCSV = async (sessions: CountSession[]): Promise<void> => {
+export const generateXLSXContent = (data: ExcelRow[]): string => {
+  // Criar CSV formatado para Excel com encoding UTF-8 BOM
+  let content = '\ufeff'; // BOM para Excel UTF-8
+  
+  // Cabeçalhos das colunas
+  const headers = [
+    'Data',
+    'Ambiente', 
+    'Nome do Contador',
+    'Hora Inicial',
+    'Hora Final',
+    'Total Minutos',
+    'Registro Contagem',
+    'Pirarucu',
+    'Bodeco',
+    'Total'
+  ];
+  
+  content += headers.join(';') + '\n';
+  
+  // Dados das linhas
+  data.forEach(row => {
+    const values = [
+      row.data,
+      row.ambiente,
+      row.nomeContador,
+      row.horaInicial,
+      row.horaFinal,
+      row.totalMinutos.toString(),
+      row.registroContagem.toString(),
+      row.pirarucu.toString(),
+      row.bodeco.toString(),
+      row.total.toString()
+    ];
+    
+    content += values.join(';') + '\n';
+  });
+  
+  return content;
+};
+
+export const exportToXLSX = async (sessions: CountSession[]): Promise<void> => {
   try {
-    const data = prepareDataByEnvironment(sessions);
-    const csvContent = generateCSVContent(data);
-    const fileName = `pirarucu_dados_${new Date().toISOString().split('T')[0]}.csv`;
+    if (sessions.length === 0) {
+      throw new Error('Nenhum dado para exportar');
+    }
+
+    const data = prepareExcelData(sessions);
+    const xlsxContent = generateXLSXContent(data);
+    const fileName = `Pirarucu_Contagem_${new Date().toISOString().split('T')[0]}.csv`;
     
     if (Platform.OS === 'web') {
-      // Para web, download direto
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      // Web: Download automático
+      const blob = new Blob([xlsxContent], { 
+        type: 'application/vnd.ms-excel;charset=utf-8' 
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -128,60 +159,39 @@ export const exportToCSV = async (sessions: CountSession[]): Promise<void> => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } else {
-      // Para mobile, usar expo-sharing se disponível
+      // Mobile: Compartilhamento via apps nativos
       const fileUri = FileSystem.documentDirectory + fileName;
-      await FileSystem.writeAsStringAsync(fileUri, csvContent);
+      await FileSystem.writeAsStringAsync(fileUri, xlsxContent, {
+        encoding: FileSystem.EncodingType.UTF8
+      });
       
-      // Tentar compartilhar o arquivo
       const { Share } = require('react-native');
       await Share.share({
-        title: 'Dados de Contagem Pirarucu',
-        message: 'Arquivo CSV com dados consolidados',
+        title: 'Relatório Contagem Pirarucu',
+        message: 'Planilha Excel com dados de contagem',
         url: fileUri,
       });
     }
   } catch (error) {
-    throw new Error('Erro ao exportar dados para CSV: ' + error);
+    console.log('Erro na exportação XLSX:', error);
+    throw error;
   }
 };
 
-export const generateExcelCompatibleCSV = (sessions: CountSession[]): string => {
-  const data = prepareDataByEnvironment(sessions);
-  
-  let excel = '\ufeff'; // BOM para Excel UTF-8
-  excel += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
-  excel += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
-  
-  // Resumo Geral
-  excel += 'RESUMO GERAL POR AMBIENTE\n';
-  excel += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
-  
-  data.forEach(env => {
-    excel += `${env.ambiente};${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};${env.contadores.length}\n`;
-  });
-  
-  excel += '\n';
-  
-  // Detalhes por ambiente
-  data.forEach(env => {
-    excel += `\nDETALHES - ${env.ambiente}\n`;
-    excel += 'Contador;Setor;Periodo;Bodecos;Pirarucus;Total\n';
-    
-    env.contadores.forEach(contador => {
-      excel += `${contador.contador};${contador.setor};${contador.periodo};${contador.bodecos};${contador.pirarucus};${contador.total}\n`;
-    });
-    
-    excel += '\nCONTAGENS INDIVIDUAIS - ' + env.ambiente + '\n';
-    excel += 'Contador;Num Contagem;Bodecos;Pirarucus;Horario\n';
-    
-    env.contadores.forEach(contador => {
-      contador.detalhes.forEach(det => {
-        excel += `${contador.contador};${det.contagem};${det.bodecos};${det.pirarucus};${det.hora}\n`;
-      });
-    });
-    
-    excel += '\n';
-  });
-  
-  return excel;
+export const getExportSummary = (sessions: CountSession[]) => {
+  const data = prepareExcelData(sessions);
+  const ambientes = [...new Set(data.map(row => row.ambiente))];
+  const contadores = [...new Set(data.map(row => row.nomeContador))];
+  const totalRegistros = data.length;
+  const totalPirarucus = data.reduce((sum, row) => sum + row.pirarucu, 0);
+  const totalBodecos = data.reduce((sum, row) => sum + row.bodeco, 0);
+
+  return {
+    totalRegistros,
+    totalAmbientes: ambientes.length,
+    totalContadores: contadores.length,
+    totalPirarucus,
+    totalBodecos,
+    totalGeral: totalPirarucus + totalBodecos
+  };
 };

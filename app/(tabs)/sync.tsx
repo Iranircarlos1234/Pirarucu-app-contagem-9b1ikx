@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { exportToCSV } from '../../utils/exportExcel';
+import { exportToXLSX, getExportSummary as getExportSummaryUtil } from '../../utils/exportExcel';
 
 interface CountSession {
   id: string;
@@ -97,39 +97,25 @@ export default function SyncScreen() {
     }
   };
 
-  const exportExcelForSharing = async () => {
+  const exportXLSXData = async () => {
     try {
       if (sessions.length === 0) {
+        console.log('Nenhum dado para exportar');
         return;
       }
 
-      // Preparar dados para Excel
-      const excelData = prepareExcelData(sessions);
-      const csvContent = generateCSVContent(excelData);
-      const fileName = `Pirarucu_Relatorio_${new Date().toISOString().split('T')[0]}.csv`;
-      
-      if (Platform.OS === 'web') {
-        // Web: Download direto
-        downloadFile(csvContent, fileName);
-      } else {
-        // Mobile: Compartilhar via apps nativos
-        const { Share } = require('react-native');
-        
-        // Salvar arquivo temporário
-        const FileSystem = require('expo-file-system');
-        const fileUri = FileSystem.documentDirectory + fileName;
-        await FileSystem.writeAsStringAsync(fileUri, csvContent);
-        
-        // Compartilhar via WhatsApp, Email, etc.
-        await Share.share({
-          title: 'Relatório de Contagem Pirarucu',
-          message: 'Segue relatório consolidado de contagem de pirarucu',
-          url: fileUri,
-        });
-      }
+      await exportToXLSX(sessions);
+      console.log('Excel exportado com sucesso');
     } catch (error) {
       console.log('Erro na exportação Excel:', error);
     }
+  };
+
+  const getExportSummary = () => {
+    if (sessions.length === 0) {
+      return { totalRegistros: 0, totalAmbientes: 0, totalContadores: 0 };
+    }
+    return getExportSummary(sessions);
   };
 
   const prepareExcelData = (sessions: CountSession[]) => {
@@ -363,20 +349,32 @@ export default function SyncScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Excel Export Section */}
+                {/* Excel Export Section */}
         <View style={styles.excelSection}>
-          <Text style={styles.sectionTitle}>Exportar Relatório</Text>
+          <Text style={styles.sectionTitle}>Exportar Planilha Excel</Text>
           
-          <TouchableOpacity style={styles.excelExportButton} onPress={exportExcelForSharing}>
-            <MaterialIcons name="table-chart" size={28} color="white" />
-            <Text style={styles.excelExportText}>Exportar Excel - Compartilhar</Text>
-            <Text style={styles.excelExportSubtext}>WhatsApp • Email • Drive</Text>
+          <TouchableOpacity style={styles.excelExportButton} onPress={exportXLSXData}>
+            <MaterialIcons name="table-chart" size={32} color="white" />
+            <Text style={styles.excelExportText}>Exportar XLSX</Text>
+            <Text style={styles.excelExportSubtext}>Planilha Excel • WhatsApp • Email</Text>
           </TouchableOpacity>
+          
+          <View style={styles.exportPreview}>
+            <Text style={styles.previewTitle}>Colunas da Planilha:</Text>
+            <Text style={styles.previewColumns}>
+              Data • Ambiente • Nome do Contador • Hora Inicial • Hora Final • 
+              Total Minutos • Registro Contagem • Pirarucu • Bodeco • Total
+            </Text>
+          </View>
           
           <View style={styles.statsPreview}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{stats.contagens}</Text>
-              <Text style={styles.statLabel}>Contagens</Text>
+              <Text style={styles.statLabel}>Sessões</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{getExportSummary().totalRegistros}</Text>
+              <Text style={styles.statLabel}>Linhas Excel</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{stats.totalBodeco}</Text>
@@ -558,7 +556,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  excelSection: {
+    excelSection: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
@@ -570,14 +568,14 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   excelExportButton: {
-    backgroundColor: '#DC2626',
+    backgroundColor: '#16A34A',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
     borderRadius: 12,
     marginBottom: 16,
-    shadowColor: '#DC2626',
+    shadowColor: '#16A34A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -585,14 +583,31 @@ const styles = StyleSheet.create({
   },
   excelExportText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     marginTop: 8,
   },
   excelExportSubtext: {
-    color: '#FEE2E2',
+    color: '#BBF7D0',
     fontSize: 14,
     marginTop: 4,
+  },
+  exportPreview: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  previewColumns: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
   },
   statsPreview: {
     flexDirection: 'row',
