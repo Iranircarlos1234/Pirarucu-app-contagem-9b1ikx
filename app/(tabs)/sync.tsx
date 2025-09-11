@@ -111,11 +111,11 @@ export default function SyncScreen() {
     }
   };
 
-  const getExportSummary = () => {
+    const getCurrentExportSummary = () => {
     if (sessions.length === 0) {
       return { totalRegistros: 0, totalAmbientes: 0, totalContadores: 0 };
     }
-    return getExportSummary(sessions);
+    return getExportSummaryUtil(sessions);
   };
 
   const prepareExcelData = (sessions: CountSession[]) => {
@@ -373,7 +373,7 @@ export default function SyncScreen() {
               <Text style={styles.statLabel}>Sessões</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{getExportSummary().totalRegistros}</Text>
+              <Text style={styles.statValue}>{getCurrentExportSummary().totalRegistros}</Text>
               <Text style={styles.statLabel}>Linhas Excel</Text>
             </View>
             <View style={styles.statItem}>
