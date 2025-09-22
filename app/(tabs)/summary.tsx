@@ -45,13 +45,27 @@ interface CounterChart {
   color: string;
 }
 
+interface SavedSummary {
+  id: string;
+  timestamp: string;
+  overallStats: {
+    totalBodeco: number;
+    totalPirarucu: number;
+    totalContagens: number;
+  };
+  environmentData: EnvironmentChart[];
+  counterData: CounterChart[];
+}
+
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function SummaryScreen() {
   const navigation = useNavigation();
   const [sessions, setSessions] = useState<CountSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all');
+  const [savedSummaries, setSavedSummaries] = useState<SavedSummary[]>([]);
 
   useEffect(() => {
     loadSessions();
@@ -64,12 +78,14 @@ export default function SummaryScreen() {
     return unsubscribe;
   }, [navigation]);
 
+  // Auto-save a cada 2 segundos
   useEffect(() => {
     const interval = setInterval(() => {
       loadSessions();
+      autoSaveSummary();
     }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [sessions]);
 
   const loadSessions = async () => {
     try {
@@ -77,10 +93,53 @@ export default function SummaryScreen() {
       if (storedSessions) {
         setSessions(JSON.parse(storedSessions));
       }
+      
+      // Carregar resumos salvos
+      const savedSummariesData = await AsyncStorage.getItem('saved_summaries');
+      if (savedSummariesData) {
+        setSavedSummaries(JSON.parse(savedSummariesData));
+      }
     } catch (error) {
       console.log('Erro ao carregar sessões:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateAllData = async () => {
+    setUpdating(true);
+    try {
+      // Simular carregamento
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await loadSessions();
+    } catch (error) {
+      console.log('Erro ao atualizar dados:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const autoSaveSummary = async () => {
+    if (sessions.length === 0) return;
+
+    try {
+      const overallStats = getOverallStats();
+      const environmentChart = getEnvironmentChart();
+      const counterChart = getCounterChart();
+
+      const summaryData: SavedSummary = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        overallStats,
+        environmentData: environmentChart,
+        counterData: counterChart
+      };
+
+      const updatedSummaries = [...savedSummaries, summaryData].slice(-10); // Manter apenas últimos 10
+      setSavedSummaries(updatedSummaries);
+      await AsyncStorage.setItem('saved_summaries', JSON.stringify(updatedSummaries));
+    } catch (error) {
+      console.log('Erro no auto-save do resumo:', error);
     }
   };
 
@@ -166,7 +225,9 @@ export default function SummaryScreen() {
   const clearAllData = async () => {
     try {
       await AsyncStorage.removeItem('pirarucu_sessions');
+      await AsyncStorage.removeItem('saved_summaries');
       setSessions([]);
+      setSavedSummaries([]);
     } catch (error) {
       console.log('Erro ao excluir dados:', error);
     }
@@ -266,6 +327,24 @@ export default function SummaryScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Botão Atualizar Dados */}
+        <View style={styles.updateSection}>
+          <TouchableOpacity 
+            style={[styles.updateButton, updating && styles.updateButtonLoading]} 
+            onPress={updateAllData}
+            disabled={updating}
+          >
+            <MaterialIcons 
+              name={updating ? "sync" : "refresh"} 
+              size={24} 
+              color="white" 
+            />
+            <Text style={styles.updateButtonText}>
+              {updating ? 'Atualizando...' : 'Atualizar Dados'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Overall Statistics */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Estatísticas Gerais</Text>
@@ -530,6 +609,31 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#6B7280',
+  },
+  updateSection: {
+    marginBottom: 16,
+  },
+  updateButton: {
+    backgroundColor: '#16A34A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  updateButtonLoading: {
+    backgroundColor: '#9CA3AF',
+  },
+  updateButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
   statsSection: {
     backgroundColor: 'white',
