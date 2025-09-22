@@ -6,9 +6,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   Platform,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -31,41 +31,43 @@ interface CountSession {
   totalPirarucu: number;
 }
 
+interface EnvironmentChart {
+  ambiente: string;
+  total: number;
+  percentage: number;
+  color: string;
+}
+
+interface CounterChart {
+  contador: string;
+  total: number;
+  percentage: number;
+  color: string;
+}
+
+const { width: screenWidth } = Dimensions.get('window');
+
 export default function SummaryScreen() {
   const navigation = useNavigation();
   const [sessions, setSessions] = useState<CountSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all');
 
-  // Web alert state
-  const [alertConfig, setAlertConfig] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onOk?: () => void;
-  }>({ visible: false, title: '', message: '' });
-
-    // Removed showAlert function
-
-    useEffect(() => {
+  useEffect(() => {
     loadSessions();
   }, []);
 
-  // Recarregar dados quando a aba ganha foco
   useEffect(() => {
     const unsubscribe = navigation?.addListener?.('focus', () => {
       loadSessions();
     });
-
     return unsubscribe;
   }, [navigation]);
 
-  // Escutar mudanças nos dados a cada 2 segundos para sincronização automática
   useEffect(() => {
     const interval = setInterval(() => {
       loadSessions();
     }, 2000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -103,21 +105,64 @@ export default function SummaryScreen() {
     return { totalBodeco, totalPirarucu, totalContagens };
   };
 
-  const getEnvironmentStats = () => {
+  const getEnvironmentChart = (): EnvironmentChart[] => {
     const environments = getUniqueEnvironments();
-    return environments.map(env => {
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16'];
+    
+    const envData = environments.map((env, index) => {
       const envSessions = sessions.filter(session => session.ambiente === env);
-      const totalBodeco = envSessions.reduce((sum, session) => sum + session.totalBodeco, 0);
-      const totalPirarucu = envSessions.reduce((sum, session) => sum + session.totalPirarucu, 0);
-      
+      const total = envSessions.reduce((sum, session) => sum + session.totalBodeco + session.totalPirarucu, 0);
       return {
         ambiente: env,
-        contagens: envSessions.length,
-        totalBodeco,
-        totalPirarucu,
+        total,
+        color: colors[index % colors.length]
       };
     });
+
+    const maxTotal = Math.max(...envData.map(env => env.total));
+    
+    return envData.map(env => ({
+      ...env,
+      percentage: maxTotal > 0 ? (env.total / maxTotal) * 100 : 0
+    }));
   };
+
+  const getCounterChart = (): CounterChart[] => {
+    const filteredSessions = getFilteredSessions();
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
+    
+    const counterData = filteredSessions.map((session, index) => {
+      const total = session.totalBodeco + session.totalPirarucu;
+      return {
+        contador: session.contador,
+        total,
+        color: colors[index % colors.length]
+      };
+    });
+
+    const maxTotal = Math.max(...counterData.map(counter => counter.total));
+    
+    return counterData.map(counter => ({
+      ...counter,
+      percentage: maxTotal > 0 ? (counter.total / maxTotal) * 100 : 0
+    }));
+  };
+
+  const getAverageStats = () => {
+    const filteredSessions = getFilteredSessions();
+    if (filteredSessions.length === 0) return { avgBodeco: 0, avgPirarucu: 0, avgTotal: 0 };
+
+    const totalBodeco = filteredSessions.reduce((sum, session) => sum + session.totalBodeco, 0);
+    const totalPirarucu = filteredSessions.reduce((sum, session) => sum + session.totalPirarucu, 0);
+    const totalGeral = totalBodeco + totalPirarucu;
+    
+    return {
+      avgBodeco: Math.round(totalBodeco / filteredSessions.length),
+      avgPirarucu: Math.round(totalPirarucu / filteredSessions.length),
+      avgTotal: Math.round(totalGeral / filteredSessions.length)
+    };
+  };
+
   const clearAllData = async () => {
     try {
       await AsyncStorage.removeItem('pirarucu_sessions');
@@ -126,20 +171,18 @@ export default function SummaryScreen() {
       console.log('Erro ao excluir dados:', error);
     }
   };
+
   const exportData = async () => {
     try {
       if (sessions.length === 0) {
         return;
       }
 
-      // Preparar dados para exportação
       const exportContent = generateExportContent();
       
       if (Platform.OS === 'web') {
-        // Para web, baixar como arquivo
         downloadFile(exportContent, `pirarucu_contagens_${new Date().toISOString().split('T')[0]}.txt`);
       } else {
-        // Para mobile, compartilhar via apps nativos
         const { Share } = require('react-native');
         await Share.share({
           message: exportContent,
@@ -153,28 +196,22 @@ export default function SummaryScreen() {
 
   const generateExportContent = () => {
     const overallStats = getOverallStats();
-    const environmentStats = getEnvironmentStats();
+    const environmentChart = getEnvironmentChart();
     
     let content = '=== RELATÓRIO DE CONTAGEM DE PIRARUCU ===\n\n';
     content += `Data do Relatório: ${new Date().toLocaleDateString('pt-BR')}\n`;
     content += `Hora: ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
     
-    // Estatísticas Gerais
     content += '--- ESTATÍSTICAS GERAIS ---\n';
     content += `Total de Contagens: ${overallStats.totalContagens}\n`;
     content += `Total de Bodecos: ${overallStats.totalBodeco}\n`;
     content += `Total de Pirarucus: ${overallStats.totalPirarucu}\n\n`;
     
-    // Análise por Ambiente
     content += '--- ANÁLISE POR AMBIENTE ---\n';
-    environmentStats.forEach(env => {
-      content += `\n${env.ambiente}:\n`;
-      content += `  - Contagens: ${env.contagens}\n`;
-      content += `  - Bodecos: ${env.totalBodeco}\n`;
-      content += `  - Pirarucus: ${env.totalPirarucu}\n`;
+    environmentChart.forEach(env => {
+      content += `\n${env.ambiente}: ${env.total} total\n`;
     });
     
-    // Detalhes das Contagens
     content += '\n--- DETALHES DAS CONTAGENS ---\n';
     sessions.forEach((session, index) => {
       content += `\nContagem ${index + 1}:\n`;
@@ -186,7 +223,6 @@ export default function SummaryScreen() {
       content += `  Total Pirarucus: ${session.totalPirarucu}\n`;
       content += `  Contagens Registradas: ${session.contagens.length}\n`;
       
-      // Detalhes das contagens individuais
       if (session.contagens.length > 0) {
         content += '    Contagens Individuais:\n';
         session.contagens.forEach(contagem => {
@@ -222,7 +258,9 @@ export default function SummaryScreen() {
   }
 
   const overallStats = getOverallStats();
-  const environmentStats = getEnvironmentStats();
+  const environmentChart = getEnvironmentChart();
+  const counterChart = getCounterChart();
+  const averageStats = getAverageStats();
   const environments = getUniqueEnvironments();
 
   return (
@@ -249,6 +287,28 @@ export default function SummaryScreen() {
               <MaterialIcons name="pets" size={32} color="#DC2626" />
               <Text style={styles.statValue}>{overallStats.totalPirarucu}</Text>
               <Text style={styles.statLabel}>Pirarucus</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Average Statistics */}
+        <View style={styles.averageSection}>
+          <Text style={styles.sectionTitle}>Médias por Contagem</Text>
+          
+          <View style={styles.averageGrid}>
+            <View style={styles.averageCard}>
+              <Text style={styles.averageValue}>{averageStats.avgBodeco}</Text>
+              <Text style={styles.averageLabel}>Média Bodecos</Text>
+            </View>
+            
+            <View style={styles.averageCard}>
+              <Text style={styles.averageValue}>{averageStats.avgPirarucu}</Text>
+              <Text style={styles.averageLabel}>Média Pirarucus</Text>
+            </View>
+            
+            <View style={styles.averageCard}>
+              <Text style={styles.averageValue}>{averageStats.avgTotal}</Text>
+              <Text style={styles.averageLabel}>Média Total</Text>
             </View>
           </View>
         </View>
@@ -282,83 +342,106 @@ export default function SummaryScreen() {
           </View>
         )}
 
-                {/* Environment Analysis */}
-        {environmentStats.length > 0 && (
-          <View style={styles.analysisSection}>
-            <Text style={styles.sectionTitle}>Análise por Ambiente</Text>
+        {/* Environment Chart */}
+        {environmentChart.length > 0 && (
+          <View style={styles.chartSection}>
+            <Text style={styles.sectionTitle}>Gráfico por Ambiente</Text>
             
-            {selectedEnvironment === 'all' ? (
-              // Show summary cards for all environments
-              environmentStats.map((env) => (
-                <View key={env.ambiente} style={styles.environmentCard}>
-                  <View style={styles.environmentHeader}>
-                    <MaterialIcons name="location-on" size={24} color="#1E40AF" />
-                    <Text style={styles.environmentName}>{env.ambiente}</Text>
+            <View style={styles.chartContainer}>
+              {environmentChart.map((env, index) => (
+                <View key={env.ambiente} style={styles.chartItem}>
+                  <View style={styles.chartLabelRow}>
+                    <Text style={styles.chartLabel} numberOfLines={1}>{env.ambiente}</Text>
+                    <Text style={styles.chartValue}>{env.total}</Text>
                   </View>
-                  
-                  <View style={styles.environmentStats}>
-                    <View style={styles.environmentStat}>
-                      <Text style={styles.environmentStatValue}>{env.contagens}</Text>
-                      <Text style={styles.environmentStatLabel}>Contagens</Text>
-                    </View>
-                    
-                    <View style={styles.environmentStat}>
-                      <Text style={styles.environmentStatValue}>{env.totalBodeco}</Text>
-                      <Text style={styles.environmentStatLabel}>Bodecos</Text>
-                    </View>
-                    
-                    <View style={styles.environmentStat}>
-                      <Text style={styles.environmentStatValue}>{env.totalPirarucu}</Text>
-                      <Text style={styles.environmentStatLabel}>Pirarucus</Text>
-                    </View>
+                  <View style={styles.chartBarContainer}>
+                    <View 
+                      style={[
+                        styles.chartBar, 
+                        { 
+                          backgroundColor: env.color, 
+                          width: `${env.percentage}%` 
+                        }
+                      ]} 
+                    />
                   </View>
                 </View>
-              ))
-            ) : (
-              // Show detailed table for selected environment
-              <View style={styles.environmentDetailCard}>
-                <View style={styles.environmentDetailHeader}>
-                  <MaterialIcons name="location-on" size={24} color="#1E40AF" />
-                  <Text style={styles.environmentDetailName}>{selectedEnvironment}</Text>
-                </View>
-                
-                {/* Table Header */}
-                <View style={styles.tableHeader}>
-                  <Text style={styles.tableHeaderCell}>Contador</Text>
-                  <Text style={styles.tableHeaderCell}>Período</Text>
-                  <Text style={styles.tableHeaderCell}>Bodecos</Text>
-                  <Text style={styles.tableHeaderCell}>Pirarucus</Text>
-                  <Text style={styles.tableHeaderCell}>Total</Text>
-                </View>
-                
-                {/* Table Rows */}
-                {getFilteredSessions().map((session, index) => (
-                  <View key={session.id} style={[styles.tableRow, index % 2 === 0 ? styles.evenTableRow : styles.oddTableRow]}>
-                    <Text style={styles.tableCell} numberOfLines={2}>{session.contador}</Text>
-                    <Text style={styles.tableCell}>{session.horaInicio} - {session.horaFinal}</Text>
-                    <Text style={styles.tableCellNumber}>{session.totalBodeco}</Text>
-                    <Text style={styles.tableCellNumber}>{session.totalPirarucu}</Text>
-                    <Text style={styles.tableCellNumber}>{session.totalBodeco + session.totalPirarucu}</Text>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Counter Chart */}
+        {counterChart.length > 0 && (
+          <View style={styles.chartSection}>
+            <Text style={styles.sectionTitle}>Comparação entre Contadores</Text>
+            
+            <View style={styles.chartContainer}>
+              {counterChart.map((counter, index) => (
+                <View key={`${counter.contador}-${index}`} style={styles.chartItem}>
+                  <View style={styles.chartLabelRow}>
+                    <Text style={styles.chartLabel} numberOfLines={2}>{counter.contador}</Text>
+                    <Text style={styles.chartValue}>{counter.total}</Text>
                   </View>
-                ))}
-                
-                {/* Table Summary */}
-                <View style={styles.tableSummary}>
-                  <Text style={styles.tableSummaryLabel}>Totais:</Text>
-                  <Text style={styles.tableSummaryValue}>
-                    {getFilteredSessions().reduce((sum, s) => sum + s.totalBodeco, 0)} bodecos, {' '}
-                    {getFilteredSessions().reduce((sum, s) => sum + s.totalPirarucu, 0)} pirarucus
-                  </Text>
+                  <View style={styles.chartBarContainer}>
+                    <View 
+                      style={[
+                        styles.chartBar, 
+                        { 
+                          backgroundColor: counter.color, 
+                          width: `${counter.percentage}%` 
+                        }
+                      ]} 
+                    />
+                  </View>
                 </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Environment Analysis Table */}
+        {selectedEnvironment !== 'all' && getFilteredSessions().length > 0 && (
+          <View style={styles.analysisSection}>
+            <Text style={styles.sectionTitle}>Tabela - {selectedEnvironment}</Text>
+            
+            <View style={styles.environmentDetailCard}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableHeaderCell}>Contador</Text>
+                <Text style={styles.tableHeaderCell}>Período</Text>
+                <Text style={styles.tableHeaderCell}>Bodecos</Text>
+                <Text style={styles.tableHeaderCell}>Pirarucus</Text>
+                <Text style={styles.tableHeaderCell}>Total</Text>
               </View>
-            )}
+              
+              {/* Table Rows */}
+              {getFilteredSessions().map((session, index) => (
+                <View key={session.id} style={[styles.tableRow, index % 2 === 0 ? styles.evenTableRow : styles.oddTableRow]}>
+                  <Text style={styles.tableCell} numberOfLines={2}>{session.contador}</Text>
+                  <Text style={styles.tableCell}>{session.horaInicio} - {session.horaFinal}</Text>
+                  <Text style={styles.tableCellNumber}>{session.totalBodeco}</Text>
+                  <Text style={styles.tableCellNumber}>{session.totalPirarucu}</Text>
+                  <Text style={styles.tableCellNumber}>{session.totalBodeco + session.totalPirarucu}</Text>
+                </View>
+              ))}
+              
+              {/* Table Summary */}
+              <View style={styles.tableSummary}>
+                <Text style={styles.tableSummaryLabel}>Totais:</Text>
+                <Text style={styles.tableSummaryValue}>
+                  {getFilteredSessions().reduce((sum, s) => sum + s.totalBodeco, 0)} bodecos, {' '}
+                  {getFilteredSessions().reduce((sum, s) => sum + s.totalPirarucu, 0)} pirarucus
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
         {/* Recent Sessions */}
-                {getFilteredSessions().length > 0 && (
+        {getFilteredSessions().length > 0 && (
           <View style={styles.sessionsSection}>
-                        <Text style={styles.sectionTitle}>Contagens Recentes</Text>
+            <Text style={styles.sectionTitle}>Contagens Recentes</Text>
             
             {getFilteredSessions().slice(-5).reverse().map((session) => (
               <View key={session.id} style={styles.sessionCard}>
@@ -426,7 +509,6 @@ export default function SummaryScreen() {
           </View>
         )}
       </ScrollView>
-      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }
@@ -489,6 +571,41 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '600',
   },
+  averageSection: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  averageGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  averageCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  averageValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#92400E',
+  },
+  averageLabel: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+  },
   filterSection: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -518,47 +635,130 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: 'white',
   },
-  analysisSection: {
-    marginBottom: 16,
-  },
-  environmentCard: {
+  chartSection: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  environmentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+  chartContainer: {
+    gap: 12,
   },
-  environmentName: {
-    fontSize: 16,
+  chartItem: {
+    marginBottom: 8,
+  },
+  chartLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  chartLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginRight: 8,
+  },
+  chartValue: {
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginLeft: 8,
+    minWidth: 40,
+    textAlign: 'right',
   },
-  environmentStats: {
+  chartBarContainer: {
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  chartBar: {
+    height: '100%',
+    borderRadius: 4,
+    minWidth: 4,
+  },
+  analysisSection: {
+    marginBottom: 16,
+  },
+  environmentDetailCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tableHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    backgroundColor: '#1E40AF',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 2,
   },
-  environmentStat: {
+  tableHeaderCell: {
+    flex: 1,
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    minHeight: 48,
   },
-  environmentStatValue: {
-    fontSize: 20,
+  evenTableRow: {
+    backgroundColor: '#F8FAFC',
+  },
+  oddTableRow: {
+    backgroundColor: 'white',
+  },
+  tableCell: {
+    flex: 1,
+    fontSize: 12,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  tableCellNumber: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E40AF',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  tableSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  tableSummaryLabel: {
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1E40AF',
   },
-  environmentStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
+  tableSummaryValue: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#059669',
   },
   sessionsSection: {
     marginBottom: 16,
@@ -677,129 +877,5 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 8,
-    minWidth: 280,
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#1F2937',
-  },
-  modalMessage: {
-    fontSize: 16,
-    marginBottom: 20,
-    color: '#4B5563',
-    lineHeight: 22,
-  },
-  modalButton: {
-    backgroundColor: '#2563EB',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-    modalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  environmentDetailCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  environmentDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: '#E5E7EB',
-  },
-  environmentDetailName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginLeft: 8,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#1E40AF',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginBottom: 2,
-  },
-  tableHeaderCell: {
-    flex: 1,
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    minHeight: 48,
-  },
-  evenTableRow: {
-    backgroundColor: '#F8FAFC',
-  },
-  oddTableRow: {
-    backgroundColor: 'white',
-  },
-  tableCell: {
-    flex: 1,
-    fontSize: 12,
-    color: '#374151',
-    textAlign: 'center',
-  },
-  tableCellNumber: {
-    flex: 1,
-    fontSize: 12,
-    color: '#1E40AF',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  tableSummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 2,
-    borderTopColor: '#E5E7EB',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  tableSummaryLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1E40AF',
-  },
-  tableSummaryValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#059669',
   },
 });
