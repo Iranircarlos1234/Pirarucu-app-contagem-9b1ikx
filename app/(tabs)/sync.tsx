@@ -32,35 +32,91 @@ interface CountSession {
   totalPirarucu: number;
 }
 
-interface SyncDevice {
+interface ConnectedDevice {
+  id: string;
+  name: string;
+  deviceId: string;
+  status: 'online' | 'offline' | 'autonomous';
+  lastSync: string;
+  dataCount: number;
+}
+
+interface AvailableDevice {
   id: string;
   name: string;
   type: 'bluetooth' | 'wifi' | 'manual';
-  status: 'available' | 'connected' | 'syncing';
+  status: 'available' | 'connecting';
+  signal?: number;
 }
 
 export default function SyncScreen() {
   const navigation = useNavigation();
   const [sessions, setSessions] = useState<CountSession[]>([]);
-  const [devices, setDevices] = useState<SyncDevice[]>([]);
+  const [connectedDevices, setConnectedDevices] = useState<ConnectedDevice[]>([]);
+  const [availableDevices, setAvailableDevices] = useState<AvailableDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncCode, setSyncCode] = useState('');
   const [importCode, setImportCode] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [exportData, setExportData] = useState('');
+  
+  // Device identification
+  const [deviceInfo, setDeviceInfo] = useState({
+    id: '',
+    name: '',
+    isEditing: false
+  });
 
   useEffect(() => {
+    initializeDevice();
     loadData();
-    generateSyncCode();
+    loadConnectedDevices();
   }, []);
 
   useEffect(() => {
     const unsubscribe = navigation?.addListener?.('focus', () => {
       loadData();
+      loadConnectedDevices();
     });
     return unsubscribe;
   }, [navigation]);
+
+  const initializeDevice = async () => {
+    try {
+      let storedDeviceInfo = await AsyncStorage.getItem('device_info');
+      
+      if (!storedDeviceInfo) {
+        // Create new device ID
+        const newDeviceId = `DEV_${Date.now().toString(36).toUpperCase()}`;
+        const newDeviceInfo = {
+          id: newDeviceId,
+          name: `Contador ${newDeviceId.slice(-4)}`,
+          createdAt: new Date().toISOString()
+        };
+        
+        await AsyncStorage.setItem('device_info', JSON.stringify(newDeviceInfo));
+        setDeviceInfo({ ...newDeviceInfo, isEditing: false });
+      } else {
+        const parsedInfo = JSON.parse(storedDeviceInfo);
+        setDeviceInfo({ ...parsedInfo, isEditing: false });
+      }
+      
+      generateSyncCode();
+    } catch (error) {
+      console.log('Erro ao inicializar dispositivo:', error);
+    }
+  };
+
+  const updateDeviceName = async (newName: string) => {
+    try {
+      const updatedInfo = { ...deviceInfo, name: newName, isEditing: false };
+      await AsyncStorage.setItem('device_info', JSON.stringify(updatedInfo));
+      setDeviceInfo(updatedInfo);
+    } catch (error) {
+      console.log('Erro ao atualizar nome:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -75,26 +131,29 @@ export default function SyncScreen() {
     }
   };
 
+  const loadConnectedDevices = async () => {
+    try {
+      const storedDevices = await AsyncStorage.getItem('connected_devices');
+      if (storedDevices) {
+        setConnectedDevices(JSON.parse(storedDevices));
+      }
+    } catch (error) {
+      console.log('Erro ao carregar dispositivos conectados:', error);
+    }
+  };
+
+  const saveConnectedDevices = async (devices: ConnectedDevice[]) => {
+    try {
+      await AsyncStorage.setItem('connected_devices', JSON.stringify(devices));
+      setConnectedDevices(devices);
+    } catch (error) {
+      console.log('Erro ao salvar dispositivos conectados:', error);
+    }
+  };
+
   const generateSyncCode = () => {
     const code = Math.random().toString(36).substr(2, 8).toUpperCase();
     setSyncCode(code);
-  };
-
-  const prepareExportData = async () => {
-    try {
-      const allData = {
-        contagens: sessions,
-        timestamp: new Date().toISOString(),
-        version: '1.0',
-        deviceId: syncCode,
-      };
-      
-      const exportString = JSON.stringify(allData);
-      setExportData(exportString);
-      setShowExportModal(true);
-    } catch (error) {
-      console.log('Erro ao preparar dados para exportação:', error);
-    }
   };
 
   const exportXLSXData = async () => {
@@ -111,133 +170,96 @@ export default function SyncScreen() {
     }
   };
 
-    const getCurrentExportSummary = () => {
+  const getCurrentExportSummary = () => {
     if (sessions.length === 0) {
       return { totalRegistros: 0, totalAmbientes: 0, totalContadores: 0 };
     }
     return getExportSummaryUtil(sessions);
   };
 
-  const prepareExcelData = (sessions: CountSession[]) => {
-    const environmentGroups: { [key: string]: CountSession[] } = {};
-    
-    // Agrupar por ambiente
-    sessions.forEach(session => {
-      if (!environmentGroups[session.ambiente]) {
-        environmentGroups[session.ambiente] = [];
-      }
-      environmentGroups[session.ambiente].push(session);
-    });
-    
-    return Object.entries(environmentGroups).map(([ambiente, sessions]) => {
-      const contadores = sessions.map(session => ({
-        contador: session.contador,
-        setor: session.setor,
-        periodo: `${session.horaInicio} - ${session.horaFinal}`,
-        bodecos: session.totalBodeco,
-        pirarucus: session.totalPirarucu,
-        total: session.totalBodeco + session.totalPirarucu,
-        detalhes: session.contagens.map(c => ({
-          contagem: c.numero,
-          bodecos: c.bodeco,
-          pirarucus: c.pirarucu,
-          hora: c.timestamp,
-        }))
-      }));
-      
-      const totalBodecos = contadores.reduce((sum, c) => sum + c.bodecos, 0);
-      const totalPirarucus = contadores.reduce((sum, c) => sum + c.pirarucus, 0);
-      
-      return {
-        ambiente,
-        contadores,
-        totalBodecos,
-        totalPirarucus,
-        totalGeral: totalBodecos + totalPirarucus,
-      };
-    });
-  };
-
-  const generateCSVContent = (data: any[]) => {
-    let csv = '\ufeff'; // BOM para Excel UTF-8
-    csv += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
-    csv += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
-    
-    // Resumo Geral
-    csv += 'RESUMO GERAL POR AMBIENTE\n';
-    csv += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
-    
-    data.forEach(env => {
-      csv += `${env.ambiente};${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};${env.contadores.length}\n`;
-    });
-    
-    csv += '\n';
-    
-    // Detalhes por ambiente
-    data.forEach(env => {
-      csv += `\nDETALHES - ${env.ambiente}\n`;
-      csv += 'Contador;Setor;Periodo;Bodecos;Pirarucus;Total\n';
-      
-      env.contadores.forEach(contador => {
-        csv += `${contador.contador};${contador.setor};${contador.periodo};${contador.bodecos};${contador.pirarucus};${contador.total}\n`;
-      });
-      
-      csv += '\nCONTAGENS INDIVIDUAIS - ' + env.ambiente + '\n';
-      csv += 'Contador;Num Contagem;Bodecos;Pirarucus;Horario\n';
-      
-      env.contadores.forEach(contador => {
-        contador.detalhes.forEach(det => {
-          csv += `${contador.contador};${det.contagem};${det.bodecos};${det.pirarucus};${det.hora}\n`;
-        });
-      });
-      
-      csv += '\n';
-    });
-    
-    return csv;
-  };
-
-  const downloadFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const importDataFromCode = async () => {
+  const connectToDevice = async (device: AvailableDevice) => {
     try {
-      if (!importCode.trim()) {
-        return;
-      }
+      // Simulate connection process
+      setAvailableDevices(prev => 
+        prev.map(d => d.id === device.id ? { ...d, status: 'connecting' } : d)
+      );
 
-      const importedData = JSON.parse(importCode);
-      
-      if (!importedData.contagens || !Array.isArray(importedData.contagens)) {
-        return;
-      }
+      // Simulate delay
+      setTimeout(async () => {
+        const newConnectedDevice: ConnectedDevice = {
+          id: device.id,
+          name: device.name,
+          deviceId: `DEV_${Date.now().toString(36).toUpperCase().slice(-4)}`,
+          status: 'autonomous',
+          lastSync: new Date().toLocaleTimeString('pt-BR'),
+          dataCount: Math.floor(Math.random() * 50) + 1
+        };
 
-      // Mesclar dados
-      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
-      const currentSessions = existingSessions ? JSON.parse(existingSessions) : [];
-      
-      // Evitar duplicatas baseado no ID
-      const existingIds = new Set(currentSessions.map((s: CountSession) => s.id));
-      const newSessions = importedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
-      
-      const mergedSessions = [...currentSessions, ...newSessions];
-      await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(mergedSessions));
-      
-      setSessions(mergedSessions);
-      setImportCode('');
-      setShowImportModal(false);
+        const updatedConnected = [...connectedDevices, newConnectedDevice];
+        await saveConnectedDevices(updatedConnected);
+
+        // Remove from available
+        setAvailableDevices(prev => prev.filter(d => d.id !== device.id));
+        
+        console.log(`Conectado a ${device.name} - Funcionando autonomamente`);
+      }, 2000);
     } catch (error) {
-      console.log('Erro na importação:', error);
+      console.log('Erro na conexão:', error);
     }
+  };
+
+  const disconnectDevice = async (deviceId: string) => {
+    try {
+      const updatedDevices = connectedDevices.filter(d => d.id !== deviceId);
+      await saveConnectedDevices(updatedDevices);
+      console.log('Dispositivo desconectado');
+    } catch (error) {
+      console.log('Erro ao desconectar:', error);
+    }
+  };
+
+  const scanForDevices = () => {
+    setLoading(true);
+    
+    setTimeout(() => {
+      const mockDevices: AvailableDevice[] = [
+        { 
+          id: '1', 
+          name: 'Contador João - Samsung A32', 
+          type: 'bluetooth', 
+          status: 'available',
+          signal: 85
+        },
+        { 
+          id: '2', 
+          name: 'Contador Maria - iPhone 12', 
+          type: 'bluetooth', 
+          status: 'available',
+          signal: 72
+        },
+        { 
+          id: '3', 
+          name: 'Tablet Supervisor', 
+          type: 'wifi', 
+          status: 'available',
+          signal: 95
+        },
+        { 
+          id: '4', 
+          name: 'Contador Pedro - Xiaomi', 
+          type: 'bluetooth', 
+          status: 'available',
+          signal: 58
+        }
+      ];
+      
+      // Remove devices already connected
+      const connectedIds = connectedDevices.map(d => d.id);
+      const filteredDevices = mockDevices.filter(d => !connectedIds.includes(d.id));
+      
+      setAvailableDevices(filteredDevices);
+      setLoading(false);
+    }, 2000);
   };
 
   const shareData = async () => {
@@ -246,7 +268,8 @@ export default function SyncScreen() {
         contagens: sessions,
         timestamp: new Date().toISOString(),
         version: '1.0',
-        deviceId: syncCode,
+        deviceId: deviceInfo.id,
+        deviceName: deviceInfo.name,
       };
       
       const shareContent = JSON.stringify(allData);
@@ -284,6 +307,53 @@ export default function SyncScreen() {
     }
   };
 
+  const importDataFromCode = async () => {
+    try {
+      if (!importCode.trim()) {
+        return;
+      }
+
+      const importedData = JSON.parse(importCode);
+      
+      if (!importedData.contagens || !Array.isArray(importedData.contagens)) {
+        return;
+      }
+
+      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
+      const currentSessions = existingSessions ? JSON.parse(existingSessions) : [];
+      
+      const existingIds = new Set(currentSessions.map((s: CountSession) => s.id));
+      const newSessions = importedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
+      
+      const mergedSessions = [...currentSessions, ...newSessions];
+      await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(mergedSessions));
+      
+      setSessions(mergedSessions);
+      setImportCode('');
+      setShowImportModal(false);
+    } catch (error) {
+      console.log('Erro na importação:', error);
+    }
+  };
+
+  const prepareExportData = async () => {
+    try {
+      const allData = {
+        contagens: sessions,
+        timestamp: new Date().toISOString(),
+        version: '1.0',
+        deviceId: deviceInfo.id,
+        deviceName: deviceInfo.name,
+      };
+      
+      const exportString = JSON.stringify(allData);
+      setExportData(exportString);
+      setShowExportModal(true);
+    } catch (error) {
+      console.log('Erro ao preparar dados para exportação:', error);
+    }
+  };
+
   const copyToClipboard = async (text: string) => {
     if (Platform.OS === 'web') {
       try {
@@ -309,24 +379,6 @@ export default function SyncScreen() {
     }
   };
 
-  const simulateBluetoothScan = () => {
-    setLoading(true);
-    
-    setTimeout(() => {
-      const mockDevices: SyncDevice[] = [
-        { id: '1', name: 'Contador João - Samsung A32', type: 'bluetooth', status: 'available' },
-        { id: '2', name: 'Contador Maria - iPhone 12', type: 'bluetooth', status: 'available' },
-        { id: '3', name: 'Tablet Supervisor', type: 'wifi', status: 'available' },
-      ];
-      setDevices(mockDevices);
-      setLoading(false);
-    }, 2000);
-  };
-
-  const connectToDevice = (device: SyncDevice) => {
-    console.log(`Tentativa de conexão com ${device.name}`);
-  };
-
   const getTotalStats = () => {
     const totalBodeco = sessions.reduce((sum, session) => sum + session.totalBodeco, 0);
     const totalPirarucu = sessions.reduce((sum, session) => sum + session.totalPirarucu, 0);
@@ -349,7 +401,95 @@ export default function SyncScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-                {/* Excel Export Section */}
+        
+        {/* Device Info Section */}
+        <View style={styles.deviceSection}>
+          <Text style={styles.sectionTitle}>Meu Dispositivo</Text>
+          
+          <View style={styles.deviceCard}>
+            <View style={styles.deviceHeader}>
+              <MaterialIcons name="smartphone" size={32} color="#2563EB" />
+              <View style={styles.deviceDetails}>
+                {deviceInfo.isEditing ? (
+                  <View style={styles.editContainer}>
+                    <TextInput
+                      style={styles.editInput}
+                      value={deviceInfo.name}
+                      onChangeText={(text) => setDeviceInfo(prev => ({ ...prev, name: text }))}
+                      onBlur={() => updateDeviceName(deviceInfo.name)}
+                      autoFocus
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    onPress={() => setDeviceInfo(prev => ({ ...prev, isEditing: true }))}
+                  >
+                    <Text style={styles.deviceName}>{deviceInfo.name}</Text>
+                    <Text style={styles.deviceId}>ID: {deviceInfo.id}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={styles.deviceStatus}>
+                <View style={[styles.statusDot, { backgroundColor: '#16A34A' }]} />
+                <Text style={styles.statusText}>ATIVO</Text>
+              </View>
+            </View>
+            
+            <View style={styles.deviceStats}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{stats.contagens}</Text>
+                <Text style={styles.statLabel}>Contagens</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{stats.totalBodeco}</Text>
+                <Text style={styles.statLabel}>Bodecos</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{stats.totalPirarucu}</Text>
+                <Text style={styles.statLabel}>Pirarucus</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Connected Devices Section */}
+        {connectedDevices.length > 0 && (
+          <View style={styles.connectedSection}>
+            <Text style={styles.sectionTitle}>Dispositivos Conectados ({connectedDevices.length})</Text>
+            
+            {connectedDevices.map((device) => (
+              <View key={device.id} style={styles.connectedDeviceCard}>
+                <View style={styles.connectedDeviceHeader}>
+                  <MaterialIcons name="devices" size={24} color="#059669" />
+                  <View style={styles.connectedDeviceInfo}>
+                    <Text style={styles.connectedDeviceName}>{device.name}</Text>
+                    <Text style={styles.connectedDeviceId}>ID: {device.deviceId}</Text>
+                    <Text style={styles.lastSync}>Última sync: {device.lastSync}</Text>
+                  </View>
+                  <View style={styles.connectedStatus}>
+                    <View style={[styles.statusDot, { backgroundColor: '#F59E0B' }]} />
+                    <Text style={[styles.statusText, { color: '#F59E0B' }]}>AUTÔNOMO</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.connectedActions}>
+                  <View style={styles.dataCount}>
+                    <Text style={styles.dataCountText}>{device.dataCount} registros</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.disconnectButton}
+                    onPress={() => disconnectDevice(device.id)}
+                  >
+                    <MaterialIcons name="close" size={20} color="#DC2626" />
+                    <Text style={styles.disconnectText}>Desconectar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Excel Export Section */}
         <View style={styles.excelSection}>
           <Text style={styles.sectionTitle}>Exportar Planilha Excel</Text>
           
@@ -359,7 +499,7 @@ export default function SyncScreen() {
             <Text style={styles.excelExportSubtext}>Planilha Excel • WhatsApp • Email</Text>
           </TouchableOpacity>
           
-                    <View style={styles.exportPreview}>
+          <View style={styles.exportPreview}>
             <Text style={styles.previewTitle}>Colunas da Planilha:</Text>
             <Text style={styles.previewColumns}>
               Ordem de Contagem • Data • Ambiente • Nome do Contador • Hora Inicial • Hora Final • 
@@ -389,7 +529,7 @@ export default function SyncScreen() {
 
         {/* Sync Code */}
         <View style={styles.syncCodeSection}>
-          <Text style={styles.sectionTitle}>Código do Dispositivo</Text>
+          <Text style={styles.sectionTitle}>Código de Sincronização</Text>
           <View style={styles.syncCodeContainer}>
             <Text style={styles.syncCodeText}>{syncCode}</Text>
             <TouchableOpacity style={styles.refreshButton} onPress={generateSyncCode}>
@@ -421,28 +561,29 @@ export default function SyncScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Bluetooth Section */}
+        {/* Available Devices Section */}
         <View style={styles.bluetoothSection}>
           <View style={styles.bluetoothHeader}>
-            <Text style={styles.sectionTitle}>Dispositivos Próximos</Text>
-            <TouchableOpacity style={styles.scanButton} onPress={simulateBluetoothScan}>
+            <Text style={styles.sectionTitle}>Dispositivos Disponíveis</Text>
+            <TouchableOpacity style={styles.scanButton} onPress={scanForDevices}>
               <MaterialIcons name="bluetooth-searching" size={24} color="#2563EB" />
               <Text style={styles.scanButtonText}>Buscar</Text>
             </TouchableOpacity>
           </View>
 
-          {devices.length === 0 ? (
+          {availableDevices.length === 0 ? (
             <View style={styles.emptyDevices}>
               <MaterialIcons name="bluetooth-disabled" size={48} color="#9CA3AF" />
               <Text style={styles.emptyDevicesText}>Nenhum dispositivo encontrado</Text>
               <Text style={styles.emptyDevicesSubtext}>Toque em "Buscar" para procurar dispositivos</Text>
             </View>
           ) : (
-            devices.map((device) => (
+            availableDevices.map((device) => (
               <TouchableOpacity 
                 key={device.id} 
                 style={styles.deviceCard}
                 onPress={() => connectToDevice(device)}
+                disabled={device.status === 'connecting'}
               >
                 <View style={styles.deviceInfo}>
                   <MaterialIcons 
@@ -453,12 +594,18 @@ export default function SyncScreen() {
                   <View style={styles.deviceDetails}>
                     <Text style={styles.deviceName}>{device.name}</Text>
                     <Text style={styles.deviceStatus}>
-                      {device.status === 'available' ? 'Disponível' : 
-                       device.status === 'connected' ? 'Conectado' : 'Sincronizando'}
+                      {device.status === 'available' ? 'Disponível' : 'Conectando...'}
                     </Text>
+                    {device.signal && (
+                      <Text style={styles.signalStrength}>Sinal: {device.signal}%</Text>
+                    )}
                   </View>
                 </View>
-                <MaterialIcons name="chevron-right" size={24} color="#6B7280" />
+                <MaterialIcons 
+                  name={device.status === 'connecting' ? 'sync' : 'chevron-right'} 
+                  size={24} 
+                  color="#6B7280" 
+                />
               </TouchableOpacity>
             ))
           )}
@@ -556,7 +703,159 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-    excelSection: {
+  deviceSection: {
+    marginBottom: 20,
+  },
+  deviceCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  deviceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deviceDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  deviceName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  deviceId: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  deviceStatus: {
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#16A34A',
+  },
+  editContainer: {
+    flex: 1,
+  },
+  editInput: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2563EB',
+    paddingBottom: 2,
+  },
+  deviceStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 16,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  connectedSection: {
+    marginBottom: 20,
+  },
+  connectedDeviceCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  connectedDeviceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  connectedDeviceInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  connectedDeviceName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  connectedDeviceId: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  lastSync: {
+    fontSize: 12,
+    color: '#059669',
+    marginTop: 2,
+  },
+  connectedStatus: {
+    alignItems: 'center',
+  },
+  connectedActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dataCount: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  dataCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  disconnectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  disconnectText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+    marginLeft: 4,
+  },
+  excelSection: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
@@ -615,20 +914,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
     padding: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
-    marginTop: 4,
   },
   syncCodeSection: {
     backgroundColor: 'white',
@@ -743,34 +1028,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
   deviceInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  deviceDetails: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  deviceName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  deviceStatus: {
-    fontSize: 14,
-    color: '#6B7280',
+  signalStrength: {
+    fontSize: 12,
+    color: '#059669',
     marginTop: 2,
   },
   modalOverlay: {
