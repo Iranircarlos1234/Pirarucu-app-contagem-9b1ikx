@@ -38,7 +38,7 @@ export default function TabLayout() {
           headerTitle: 'Registro de Contagem',
         }}
       />
-            <Tabs.Screen
+      <Tabs.Screen
         name="summary"
         options={{
           title: 'Resumo',
@@ -48,7 +48,7 @@ export default function TabLayout() {
           headerTitle: 'Resumo de Contagens',
         }}
       />
-            <Tabs.Screen
+      <Tabs.Screen
         name="relatorio"
         options={{
           title: 'Relatório Final',
