@@ -36,6 +36,7 @@ interface BluetoothDevice {
   name: string;
   signal: number;
   status: 'available' | 'connecting' | 'connected';
+  role?: 'principal' | 'emissor';
 }
 
 export default function CountingScreen() {
@@ -64,6 +65,11 @@ export default function CountingScreen() {
   const [isScanning, setIsScanning] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('Pronto');
   const [receivedDataPreview, setReceivedDataPreview] = useState<any>(null);
+  
+  // Principal/Emissor system
+  const [isPrincipal, setIsPrincipal] = useState(false);
+  const [connectedEmissors, setConnectedEmissors] = useState<BluetoothDevice[]>([]);
+  const [autoCollecting, setAutoCollecting] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -87,6 +93,13 @@ export default function CountingScreen() {
       }
     };
   }, [isActive, timeLeft]);
+
+  // Auto-collect data when principal
+  useEffect(() => {
+    if (isPrincipal && connectedEmissors.length > 0) {
+      startAutoCollection();
+    }
+  }, [isPrincipal, connectedEmissors]);
 
   const loadSyncStatus = async () => {
     try {
@@ -113,24 +126,140 @@ export default function CountingScreen() {
     setEmissorCode(code);
   };
 
+  const becomePrincipal = async () => {
+    if (isActive) {
+      console.log('⚠️ Não é possível se tornar principal durante contagem ativa');
+      setSyncStatus('Pare a contagem primeiro');
+      return;
+    }
+
+    try {
+      setIsPrincipal(true);
+      setSyncStatus('🎯 RECEPTOR PRINCIPAL ATIVO');
+      
+      // Transform connected devices into emissors
+      const emissors = availableDevices
+        .filter(device => device.status === 'connected')
+        .map(device => ({ ...device, role: 'emissor' as const }));
+      
+      setConnectedEmissors(emissors);
+      
+      // Remove from available devices
+      setAvailableDevices(prev => 
+        prev.filter(device => device.status !== 'connected')
+      );
+      
+      console.log(`🎯 Dispositivo principal ativo com ${emissors.length} emissores`);
+      
+      // Start auto-collection
+      if (emissors.length > 0) {
+        setAutoCollecting(true);
+        setSyncStatus(`🔄 Coletando de ${emissors.length} emissores`);
+      }
+      
+    } catch (error) {
+      console.log('❌ Erro ao se tornar principal:', error);
+      setSyncStatus('❌ Erro ao ativar principal');
+    }
+  };
+
+  const startAutoCollection = async () => {
+    if (!isPrincipal || connectedEmissors.length === 0) return;
+
+    try {
+      setAutoCollecting(true);
+      
+      // Simulate auto-collection from emissors
+      const collectionPromises = connectedEmissors.map(async (emissor, index) => {
+        await new Promise(resolve => setTimeout(resolve, (index + 1) * 1000));
+        
+        // Simulate receiving data from emissor
+        const mockData = {
+          deviceName: emissor.name,
+          contagens: [
+            {
+              id: `auto_${Date.now()}_${index}`,
+              ambiente: ambiente || `Ambiente ${index + 1}`,
+              setor: `Setor ${emissor.name}`,
+              contador: emissor.name.split(' ')[1] || `Contador ${index + 1}`,
+              horaInicio: new Date().toLocaleTimeString('pt-BR'),
+              horaFinal: new Date().toLocaleTimeString('pt-BR'),
+              contagens: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, i) => ({
+                numero: i + 1,
+                bodeco: Math.floor(Math.random() * 50) + 10,
+                pirarucu: Math.floor(Math.random() * 20) + 5,
+                timestamp: new Date().toLocaleTimeString('pt-BR')
+              })),
+              totalBodeco: 0,
+              totalPirarucu: 0
+            }
+          ],
+          timestamp: new Date().toISOString()
+        };
+
+        // Calculate totals
+        mockData.contagens[0].totalBodeco = mockData.contagens[0].contagens.reduce((sum, c) => sum + c.bodeco, 0);
+        mockData.contagens[0].totalPirarucu = mockData.contagens[0].contagens.reduce((sum, c) => sum + c.pirarucu, 0);
+
+        await processReceivedData(mockData, emissor.name);
+        
+        console.log(`📥 Dados coletados de ${emissor.name}`);
+      });
+
+      await Promise.all(collectionPromises);
+      
+      setSyncStatus(`✅ ${connectedEmissors.length} emissores sincronizados`);
+      
+    } catch (error) {
+      console.log('❌ Erro na coleta automática:', error);
+      setSyncStatus('❌ Erro na coleta');
+    } finally {
+      setAutoCollecting(false);
+    }
+  };
+
+  const processReceivedData = async (receivedData: any, sourceName: string) => {
+    try {
+      // Load existing sessions
+      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
+      const currentSessions = existingSessions ? JSON.parse(existingSessions) : [];
+      
+      // Filter new data
+      const existingIds = new Set(currentSessions.map((s: CountSession) => s.id));
+      const newSessions = receivedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
+      
+      if (newSessions.length > 0) {
+        const mergedSessions = [...currentSessions, ...newSessions];
+        await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(mergedSessions));
+        console.log(`✅ ${newSessions.length} registros de ${sourceName} integrados`);
+      }
+      
+    } catch (error) {
+      console.log(`❌ Erro ao processar dados de ${sourceName}:`, error);
+    }
+  };
+
   const receiveData = async () => {
     if (!receptorData.trim()) {
       console.log('❌ Nenhum código inserido');
       return;
     }
 
+    // Transform into principal when receiving data
+    await becomePrincipal();
+
     try {
       setSyncStatus('Processando dados...');
       const receivedData = JSON.parse(receptorData);
       
-      // Validar estrutura dos dados
+      // Validate data structure
       if (!receivedData.contagens || !Array.isArray(receivedData.contagens)) {
         console.log('❌ Formato de dados inválido');
         setSyncStatus('Erro: Formato inválido');
         return;
       }
 
-      // Preview dos dados recebidos
+      // Preview received data
       setReceivedDataPreview({
         deviceName: receivedData.deviceName || 'Dispositivo desconhecido',
         totalContagens: receivedData.contagens.length,
@@ -138,31 +267,10 @@ export default function CountingScreen() {
         timestamp: receivedData.timestamp
       });
 
-      // Carregar sessões existentes
-      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
-      const currentSessions = existingSessions ? JSON.parse(existingSessions) : [];
+      await processReceivedData(receivedData, receivedData.deviceName);
       
-      // Filtrar apenas dados novos
-      const existingIds = new Set(currentSessions.map((s: CountSession) => s.id));
-      const newSessions = receivedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
-      
-      if (newSessions.length === 0) {
-        console.log('ℹ️ Nenhum dado novo encontrado');
-        setSyncStatus('Dados já existem');
-        setReceptorData('');
-        return;
-      }
-      
-      // Mesclar dados
-      const mergedSessions = [...currentSessions, ...newSessions];
-      await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(mergedSessions));
-      
-      console.log(`✅ Importados ${newSessions.length} novos registros de ${receivedData.deviceName || 'dispositivo'}`);
-      setSyncStatus(`✅ ${newSessions.length} novos registros importados`);
+      setSyncStatus(`✅ Dados integrados como PRINCIPAL`);
       setReceptorData('');
-      
-      // Atualizar código emissor após importação
-      generateEmissorCode();
       
     } catch (error) {
       console.log('❌ Erro na importação:', error);
@@ -183,7 +291,8 @@ export default function CountingScreen() {
         version: '1.0',
         deviceName: `Contador ${emissorCode}`,
         ambiente: ambiente || 'Ambiente não informado',
-        totalRegistros: sessionsData.length
+        totalRegistros: sessionsData.length,
+        role: isPrincipal ? 'principal' : 'emissor'
       };
       
       const dataString = JSON.stringify(dataToSend);
@@ -241,7 +350,6 @@ export default function CountingScreen() {
     setSyncStatus('🔍 Buscando dispositivos...');
 
     try {
-      // Simular busca de dispositivos Bluetooth
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       const mockDevices: BluetoothDevice[] = [
@@ -288,12 +396,10 @@ export default function CountingScreen() {
     try {
       setSyncStatus(`🔗 Conectando a ${device.name}...`);
       
-      // Atualizar status do dispositivo
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { ...d, status: 'connecting' } : d)
       );
 
-      // Simular processo de conexão
       const connectionSteps = [
         'Estabelecendo conexão...',
         'Autenticando dispositivo...',
@@ -305,30 +411,22 @@ export default function CountingScreen() {
         setSyncStatus(`🔗 ${step}`);
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Simular possível falha de conexão (15% chance)
         if (Math.random() > 0.85) {
           throw new Error(`Falha na etapa: ${step}`);
         }
       }
 
-      // Sucesso na conexão
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { ...d, status: 'connected' } : d)
       );
 
       setSyncStatus(`✅ Conectado a ${device.name}`);
       console.log(`✅ Sincronização bem-sucedida com ${device.name}`);
-      
-      // Simular troca de dados automática
-      setTimeout(() => {
-        setSyncStatus(`🔄 Dispositivo ${device.name} funcionando autonomamente`);
-      }, 3000);
 
     } catch (error) {
       console.log(`❌ Erro na conexão com ${device.name}:`, error);
       setSyncStatus(`❌ Falha: ${device.name}`);
       
-      // Reverter status
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { ...d, status: 'available' } : d)
       );
@@ -364,11 +462,9 @@ export default function CountingScreen() {
     const updatedContagens = [...contagens, newCount];
     setContagens(updatedContagens);
     
-    // Reset current values
     setCurrentBodeco(0);
     setCurrentPirarucu(0);
     
-    // Auto-save
     saveSession(updatedContagens);
   };
 
@@ -396,17 +492,14 @@ export default function CountingScreen() {
       totalPirarucu,
     };
 
-    // Salvar automaticamente a contagem completa
     await saveSession(contagens, true);
     
-    // Atualizar estado
     setHoraFinal(finalTime);
     setIsActive(false);
     setTimeLeft(1200);
     setCurrentCount(currentCount + 1);
     setSyncStatus(`✅ Contagem finalizada - ${contagens.length} registros`);
     
-    // Atualizar código emissor
     generateEmissorCode();
   };
 
@@ -434,7 +527,6 @@ export default function CountingScreen() {
         sessions.push(session);
         await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(sessions));
         
-        // Atualizar status de sync
         setSyncStatus(`${sessions.length} contagens disponíveis`);
       }
     } catch (error) {
@@ -500,16 +592,32 @@ export default function CountingScreen() {
 
         {/* Enhanced Sync Section */}
         <View style={styles.syncSection}>
-          <Text style={styles.sectionTitle}>Sincronização de Dados</Text>
+          <View style={styles.syncHeaderRow}>
+            <Text style={styles.sectionTitle}>Sincronização de Dados</Text>
+            {isPrincipal && (
+              <View style={styles.principalBadge}>
+                <MaterialIcons name="stars" size={16} color="white" />
+                <Text style={styles.principalText}>PRINCIPAL</Text>
+              </View>
+            )}
+          </View>
           
           {/* Sync Status */}
-          <View style={styles.syncStatusContainer}>
+          <View style={[
+            styles.syncStatusContainer,
+            isPrincipal && styles.principalStatusContainer
+          ]}>
             <MaterialIcons 
               name={bluetoothEnabled ? "bluetooth" : "bluetooth-disabled"} 
               size={20} 
-              color={bluetoothEnabled ? "#16A34A" : "#DC2626"} 
+              color={isPrincipal ? "#16A34A" : bluetoothEnabled ? "#16A34A" : "#DC2626"} 
             />
-            <Text style={styles.syncStatusText}>{syncStatus}</Text>
+            <Text style={[
+              styles.syncStatusText,
+              isPrincipal && styles.principalStatusText
+            ]}>
+              {syncStatus}
+            </Text>
             <TouchableOpacity 
               style={[styles.bluetoothToggle, bluetoothEnabled ? styles.bluetoothOn : styles.bluetoothOff]}
               onPress={() => setBluetoothEnabled(!bluetoothEnabled)}
@@ -553,12 +661,23 @@ export default function CountingScreen() {
               )}
               
               <TouchableOpacity 
-                style={[styles.syncButton, styles.receiveButton, isActive && styles.disabledButton]} 
+                style={[
+                  styles.syncButton, 
+                  styles.receiveButton, 
+                  isPrincipal && styles.principalButton,
+                  isActive && styles.disabledButton
+                ]} 
                 onPress={receiveData}
                 disabled={isActive}
               >
-                <MaterialIcons name="file-download" size={20} color="white" />
-                <Text style={styles.syncButtonText}>Receber</Text>
+                <MaterialIcons 
+                  name={isPrincipal ? "stars" : "file-download"} 
+                  size={20} 
+                  color="white" 
+                />
+                <Text style={styles.syncButtonText}>
+                  {isPrincipal ? 'PRINCIPAL ATIVO' : 'Receber & Ser Principal'}
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -570,20 +689,57 @@ export default function CountingScreen() {
                   <Text style={styles.emissorDetails}>
                     {ambiente ? `📍 ${ambiente}` : '📍 Ambiente não definido'}
                   </Text>
+                  {isPrincipal && (
+                    <Text style={styles.emissorRole}>🎯 Modo Principal</Text>
+                  )}
                 </View>
                 <TouchableOpacity style={styles.refreshEmissor} onPress={generateEmissorCode}>
                   <MaterialIcons name="refresh" size={16} color="#2563EB" />
                 </TouchableOpacity>
               </View>
               <TouchableOpacity 
-                style={[styles.syncButton, styles.sendButton]} 
+                style={[
+                  styles.syncButton, 
+                  styles.sendButton,
+                  isPrincipal && styles.principalSendButton
+                ]} 
                 onPress={sendData}
               >
                 <MaterialIcons name="file-upload" size={20} color="white" />
-                <Text style={styles.syncButtonText}>Enviar</Text>
+                <Text style={styles.syncButtonText}>
+                  {isPrincipal ? 'Enviar como Principal' : 'Enviar'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Connected Emissors Display */}
+          {isPrincipal && connectedEmissors.length > 0 && (
+            <View style={styles.emissorsSection}>
+              <Text style={styles.emissorsTitle}>
+                📡 Emissores Conectados ({connectedEmissors.length})
+              </Text>
+              {connectedEmissors.map((emissor) => (
+                <View key={emissor.id} style={styles.emissorItem}>
+                  <MaterialIcons name="devices" size={20} color="#F59E0B" />
+                  <View style={styles.emissorDetails}>
+                    <Text style={styles.emissorName}>{emissor.name}</Text>
+                    <Text style={styles.emissorStatus}>Enviando dados automaticamente</Text>
+                  </View>
+                  <View style={styles.emissorSignal}>
+                    <Text style={styles.signalText}>{emissor.signal}%</Text>
+                  </View>
+                </View>
+              ))}
+              
+              {autoCollecting && (
+                <View style={styles.collectingIndicator}>
+                  <MaterialIcons name="sync" size={16} color="#16A34A" />
+                  <Text style={styles.collectingText}>Coletando dados automaticamente...</Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Bluetooth Section */}
           <View style={styles.bluetoothSection}>
@@ -820,6 +976,26 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  syncHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  principalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  principalText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
   syncStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -828,12 +1004,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
+  principalStatusContainer: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
   syncStatusText: {
     flex: 1,
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
+  },
+  principalStatusText: {
+    color: '#16A34A',
+    fontWeight: 'bold',
   },
   bluetoothToggle: {
     padding: 6,
@@ -914,6 +1099,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  emissorRole: {
+    fontSize: 10,
+    color: '#16A34A',
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
   refreshEmissor: {
     padding: 4,
   },
@@ -927,8 +1118,14 @@ const styles = StyleSheet.create({
   receiveButton: {
     backgroundColor: '#2563EB',
   },
+  principalButton: {
+    backgroundColor: '#16A34A',
+  },
   sendButton: {
     backgroundColor: '#059669',
+  },
+  principalSendButton: {
+    backgroundColor: '#F59E0B',
   },
   disabledButton: {
     backgroundColor: '#9CA3AF',
@@ -936,6 +1133,60 @@ const styles = StyleSheet.create({
   syncButtonText: {
     color: 'white',
     fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  emissorsSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  emissorsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  emissorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+  },
+  emissorName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  emissorStatus: {
+    fontSize: 12,
+    color: '#F59E0B',
+    marginTop: 2,
+  },
+  emissorSignal: {
+    marginLeft: 'auto',
+  },
+  signalText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  collectingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  collectingText: {
+    color: '#16A34A',
+    fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
   },
