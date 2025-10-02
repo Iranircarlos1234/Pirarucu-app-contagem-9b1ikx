@@ -51,230 +51,124 @@ interface CountSession {
   totalPirarucu: number;
 }
 
+interface EnvironmentGroup {
+  ambiente: string;
+  sessions: CountSession[];
+  totalBodecos: number;
+  totalPirarucus: number;
+  totalGeral: number;
+  contadores: string[];
+}
+
 export default function RelatorioScreen() {
   const navigation = useNavigation();
-  const [ambiente, setAmbiente] = useState('');
-  const [responsavel, setResponsavel] = useState('');
-  const [manualData, setManualData] = useState<ManualCountData[]>([]);
+  const [environmentGroups, setEnvironmentGroups] = useState<EnvironmentGroup[]>([]);
   const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterAmbiente, setFilterAmbiente] = useState('');
   const [filterContador, setFilterContador] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
 
-  // Web alert state
-  const [alertConfig, setAlertConfig] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onOk?: () => void;
-  }>({ visible: false, title: '', message: '' });
-
-    // Removed showAlert function
-
-    useEffect(() => {
+  useEffect(() => {
     loadData();
   }, []);
 
-  // Recarregar dados quando a aba ganha foco
   useEffect(() => {
     const unsubscribe = navigation?.addListener?.('focus', () => {
       loadData();
     });
-
     return unsubscribe;
   }, [navigation]);
 
-  // Escutar mudanças nos dados a cada 2 segundos para sincronização automática
+  // Auto-update every 2 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       loadData();
     }, 2000);
-
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
     try {
-      // Carregar relatórios salvos
+      // Load saved reports
       const storedReports = await AsyncStorage.getItem('saved_reports');
       if (storedReports) {
         setSavedReports(JSON.parse(storedReports));
       }
       
-            // Carregar contagens e pré-popular
+      // Load and group counting sessions by environment
       const storedSessions = await AsyncStorage.getItem('pirarucu_sessions');
       if (storedSessions) {
         const sessions: CountSession[] = JSON.parse(storedSessions);
-        await prePopulateFromContagens(sessions);
+        const grouped = groupSessionsByEnvironment(sessions);
+        setEnvironmentGroups(grouped);
       } else {
-        initializeEmptyRows();
+        setEnvironmentGroups([]);
       }
     } catch (error) {
       console.log('Erro ao carregar dados:', error);
-      initializeEmptyRows();
     } finally {
       setLoading(false);
     }
   };
-  const prePopulateFromContagens = async (sessions: CountSession[]) => {
-    if (sessions.length === 0) {
-      initializeEmptyRows();
-      return;
-    }
 
-    // Mostrar todas as contagens individuais das sessões
-    const allContagens: ManualCountData[] = [];
-
-    sessions.forEach((session, sessionIndex) => {
-      allContagens.push({
-        id: `session_${sessionIndex}`,
-        contador: session.contador,
-        bodecos: session.totalBodeco,
-        pirarucus: session.totalPirarucu,
-        total: session.totalBodeco + session.totalPirarucu,
-      });
+  const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentGroup[] => {
+    const groups: { [key: string]: CountSession[] } = {};
+    
+    // Group sessions by environment
+    sessions.forEach(session => {
+      if (!groups[session.ambiente]) {
+        groups[session.ambiente] = [];
+      }
+      groups[session.ambiente].push(session);
     });
 
-    // Adicionar 3 linhas vazias para edição manual
-    for (let i = 0; i < 3; i++) {
-      allContagens.push({
-        id: `manual_${i}`,
-        contador: '',
-        bodecos: 0,
-        pirarucus: 0,
-        total: 0,
-      });
-    }
+    // Convert to EnvironmentGroup format
+    return Object.entries(groups).map(([ambiente, sessions]) => {
+      const totalBodecos = sessions.reduce((sum, s) => sum + s.totalBodeco, 0);
+      const totalPirarucus = sessions.reduce((sum, s) => sum + s.totalPirarucu, 0);
+      const contadores = [...new Set(sessions.map(s => s.contador))];
 
-    setManualData(allContagens);
-
-        // Pré-popular ambiente - usar o último ambiente ou o mais comum
-    const ambientes = [...new Set(sessions.map(s => s.ambiente))];
-    if (ambientes.length === 1) {
-      setAmbiente(ambientes[0]);
-    } else if (ambientes.length > 1) {
-      // Se há múltiplos ambientes, usar o último registrado
-      const ultimoAmbiente = sessions[sessions.length - 1]?.ambiente;
-      if (ultimoAmbiente) {
-        setAmbiente(ultimoAmbiente);
-      }
-    }
-        // Pré-popular responsável com o último contador
-    const ultimaContagem = sessions[sessions.length - 1];
-    if (ultimaContagem) {
-      setResponsavel(ultimaContagem.contador);
-    }
-  };
-  const initializeEmptyRows = () => {
-    const emptyRows: ManualCountData[] = [];
-    for (let i = 0; i < 3; i++) {
-      emptyRows.push({
-        id: `row_${i}`,
-        contador: '',
-        bodecos: 0,
-        pirarucus: 0,
-        total: 0,
-      });
-    }
-    setManualData(emptyRows);
-  };
-
-    const updateRow = (index: number, field: keyof ManualCountData, value: string | number) => {
-    const updatedData = [...manualData];
-    
-    if (field === 'contador') {
-      updatedData[index][field] = value as string;
-    } else if (field === 'bodecos' || field === 'pirarucus') {
-      const numValue = typeof value === 'string' ? parseInt(value) || 0 : value;
-      updatedData[index][field] = numValue;
-      // Recalculate total
-      updatedData[index].total = updatedData[index].bodecos + updatedData[index].pirarucus;
-    }
-    
-    setManualData(updatedData);
-    
-    // Auto-save when data changes
-    autoSaveReport(updatedData);
-  };
-
-  const autoSaveReport = async (currentData: ManualCountData[]) => {
-    if (!ambiente.trim() || !responsavel.trim()) {
-      return;
-    }
-
-    const filledRows = currentData.filter(row => row.contador.trim() !== '');
-    
-    if (filledRows.length === 0) {
-      return;
-    }
-
-    try {
-      const now = new Date();
-      const totalBodecos = filledRows.reduce((sum, row) => sum + row.bodecos, 0);
-      const totalPirarucus = filledRows.reduce((sum, row) => sum + row.pirarucus, 0);
-      const totalGeral = totalBodecos + totalPirarucus;
-
-      const newReport: SavedReport = {
-        id: Date.now().toString(),
-        ambiente: ambiente.trim(),
-        contador: responsavel.trim(),
-        data: now.toLocaleDateString('pt-BR'),
-        hora: now.toLocaleTimeString('pt-BR'),
-        registros: filledRows,
+      return {
+        ambiente,
+        sessions,
         totalBodecos,
         totalPirarucus,
-        totalGeral,
+        totalGeral: totalBodecos + totalPirarucus,
+        contadores
       };
-
-      const updatedReports = [...savedReports, newReport];
-      setSavedReports(updatedReports);
-      await AsyncStorage.setItem('saved_reports', JSON.stringify(updatedReports));
-    } catch (error) {
-      console.log('Erro no auto-save:', error);
-    }
-  };
-  const deleteRow = (index: number) => {
-    if (manualData.length <= 1) {
-      return;
-    }
-
-    const updatedData = manualData.filter((_, i) => i !== index);
-    setManualData(updatedData);
+    });
   };
 
-  const addNewRow = () => {
-    const newRow: ManualCountData = {
-      id: `row_${Date.now()}`,
-      contador: '',
-      bodecos: 0,
-      pirarucus: 0,
-      total: 0,
-    };
-    const updatedData = [...manualData, newRow];
-    setManualData(updatedData);
-  };  const clearCurrentReport = () => {
-    setAmbiente('');
-    setResponsavel('');
-    initializeEmptyRows();
-  };
-  const exportReport = async () => {
+  const exportEnvironmentReport = async (environmentGroup?: EnvironmentGroup) => {
     try {
-      const filledRows = manualData.filter(row => row.contador.trim() !== '');
+      let dataToExport: EnvironmentGroup[];
       
-      if (filledRows.length === 0) {
+      if (environmentGroup) {
+        // Export single environment
+        dataToExport = [environmentGroup];
+      } else {
+        // Export all environments
+        dataToExport = environmentGroups;
+      }
+
+      if (dataToExport.length === 0) {
         return;
       }
 
-      const exportContent = generateExportContent(filledRows);
+      const exportContent = generateExportContent(dataToExport);
+      const fileName = environmentGroup 
+        ? `Relatorio_${environmentGroup.ambiente}_${new Date().toISOString().split('T')[0]}.csv`
+        : `Relatorio_Completo_${new Date().toISOString().split('T')[0]}.csv`;
       
       if (Platform.OS === 'web') {
-        downloadFile(exportContent, `relatorio_${ambiente}_${new Date().toISOString().split('T')[0]}.txt`);
+        downloadFile(exportContent, fileName);
       } else {
         const { Share } = require('react-native');
         await Share.share({
           message: exportContent,
-          title: `Relatório - ${ambiente}`,
+          title: `Relatório - ${environmentGroup?.ambiente || 'Completo'}`,
         });
       }
     } catch (error) {
@@ -282,37 +176,108 @@ export default function RelatorioScreen() {
     }
   };
 
-  const generateExportContent = (data: ManualCountData[]) => {
-    const totalBodecos = data.reduce((sum, row) => sum + row.bodecos, 0);
-    const totalPirarucus = data.reduce((sum, row) => sum + row.pirarucus, 0);
-    const totalGeral = totalBodecos + totalPirarucus;
+  const generateExportContent = (environmentGroups: EnvironmentGroup[]) => {
+    const today = new Date().toLocaleDateString('pt-BR');
+    let content = '\ufeff'; // BOM for Excel UTF-8
     
-    let content = '=== RELATÓRIO DE CONTAGEM DE PIRARUCU ===\n\n';
-    content += `Ambiente: ${ambiente}\n`;
-    content += `Contador Responsável: ${responsavel}\n`;
-    content += `Data: ${new Date().toLocaleDateString('pt-BR')}\n`;
-    content += `Hora: ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
+    // Report header
+    content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
+    content += `Data de Exportacao: ${today}\n\n`;
     
-    content += '--- RESUMO GERAL ---\n';
-    content += `Total de Contadores: ${data.length}\n`;
-    content += `Total de Bodecos: ${totalBodecos}\n`;
-    content += `Total de Pirarucus: ${totalPirarucus}\n`;
-    content += `Total Geral: ${totalGeral}\n\n`;
+    // Summary by environment
+    content += 'RESUMO GERAL POR AMBIENTE\n';
+    content += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
     
-    content += '--- DETALHES POR CONTADOR ---\n';
-    content += 'CONTADOR | BODECOS | PIRARUCUS | TOTAL\n';
-    content += '----------------------------------------\n';
-    
-    data.forEach(row => {
-      content += `${row.contador} | ${row.bodecos} | ${row.pirarucus} | ${row.total}\n`;
+    environmentGroups.forEach(env => {
+      content += `${env.ambiente};${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};${env.contadores.length}\n`;
     });
     
-    content += '\n=== FIM DO RELATÓRIO ===';
+    content += '\n';
+    
+    // Detailed data by environment
+    let globalOrder = 1;
+    
+    environmentGroups.forEach(env => {
+      content += `\n=== AMBIENTE: ${env.ambiente} ===\n`;
+      content += `Resumo: ${env.totalBodecos} bodecos, ${env.totalPirarucus} pirarucus, ${env.contadores.length} contadores\n\n`;
+      
+      // Column headers
+      content += 'Ordem de Contagem;Data;Ambiente;Nome do Contador;Hora Inicial;Hora Final;Total Minutos;Registro Contagem;Pirarucu;Bodeco;Total\n';
+      
+      // Process each session in the environment
+      env.sessions.forEach(session => {
+        const calculateMinutes = (inicio: string, final: string): number => {
+          try {
+            const parseTime = (timeStr: string): Date => {
+              const [time] = timeStr.split(' ');
+              const [hours, minutes, seconds] = time.split(':').map(Number);
+              const date = new Date();
+              date.setHours(hours, minutes, seconds || 0, 0);
+              return date;
+            };
+
+            const inicioTime = parseTime(inicio);
+            const finalTime = parseTime(final);
+            
+            let diffMs = finalTime.getTime() - inicioTime.getTime();
+            if (diffMs < 0) {
+              diffMs += 24 * 60 * 60 * 1000; // Add 24 hours if crossed midnight
+            }
+            
+            return Math.round(diffMs / (1000 * 60)); // Convert to minutes
+          } catch (error) {
+            return 0;
+          }
+        };
+
+        const totalMinutos = calculateMinutes(session.horaInicio, session.horaFinal);
+        const horaInicial = session.horaInicio.split(' ')[0] || session.horaInicio;
+        const horaFinal = session.horaFinal.split(' ')[0] || session.horaFinal;
+
+        // Add each count as a separate row
+        session.contagens.forEach(contagem => {
+          const values = [
+            globalOrder.toString(),
+            today,
+            session.ambiente.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
+            session.contador.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
+            horaInicial,
+            horaFinal,
+            totalMinutos.toString(),
+            contagem.numero.toString(),
+            contagem.pirarucu.toString(),
+            contagem.bodeco.toString(),
+            (contagem.pirarucu + contagem.bodeco).toString()
+          ];
+          
+          content += values.join(';') + '\n';
+          globalOrder++;
+        });
+      });
+      
+      // Environment totals
+      content += '\n';
+      content += `TOTAIS ${env.ambiente};;;;;;;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral}\n`;
+      content += '\n';
+    });
+    
+    // Final summary
+    const totalGeralBodecos = environmentGroups.reduce((sum, env) => sum + env.totalBodecos, 0);
+    const totalGeralPirarucus = environmentGroups.reduce((sum, env) => sum + env.totalPirarucus, 0);
+    const totalGeralContadores = environmentGroups.reduce((sum, env) => sum + env.contadores.length, 0);
+    
+    content += '\n=== RESUMO FINAL ===\n';
+    content += `Total de Ambientes: ${environmentGroups.length}\n`;
+    content += `Total de Contadores: ${totalGeralContadores}\n`;
+    content += `Total de Bodecos: ${totalGeralBodecos}\n`;
+    content += `Total de Pirarucus: ${totalGeralPirarucus}\n`;
+    content += `Total Geral: ${totalGeralBodecos + totalGeralPirarucus}\n`;
+    
     return content;
   };
 
   const downloadFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([content], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -331,14 +296,6 @@ export default function RelatorioScreen() {
     });
   };
 
-  const getCurrentTotals = () => {
-    const filledRows = manualData.filter(row => row.contador.trim() !== '');
-    const totalBodecos = filledRows.reduce((sum, row) => sum + row.bodecos, 0);
-    const totalPirarucus = filledRows.reduce((sum, row) => sum + row.pirarucus, 0);
-    const totalGeral = totalBodecos + totalPirarucus;
-    return { totalBodecos, totalPirarucus, totalGeral, contadores: filledRows.length };
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -349,135 +306,89 @@ export default function RelatorioScreen() {
     );
   }
 
-  const currentTotals = getCurrentTotals();
   const filteredReports = getFilteredReports();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Header Section */}
-        <View style={styles.headerSection}>
-          <Text style={styles.headerTitle}>Novo Relatório</Text>
-          
-          <View style={styles.inputRow}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nome do Ambiente</Text>
-              <TextInput
-                style={styles.input}
-                value={ambiente}
-                onChangeText={setAmbiente}
-                placeholder="Ex: Lago Grande"
-              />
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Contador Responsável</Text>
-              <TextInput
-                style={styles.input}
-                value={responsavel}
-                onChangeText={setResponsavel}
-                placeholder="Nome do responsável"
-              />
-            </View>
-          </View>
-
-          {/* Current Totals */}
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{currentTotals.contadores}</Text>
-              <Text style={styles.summaryLabel}>Contadores</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{currentTotals.totalBodecos}</Text>
-              <Text style={styles.summaryLabel}>Bodecos</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{currentTotals.totalPirarucus}</Text>
-              <Text style={styles.summaryLabel}>Pirarucus</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{currentTotals.totalGeral}</Text>
-              <Text style={styles.summaryLabel}>Total</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Table */}
-        <View style={styles.tableContainer}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={styles.headerCell}>Nome do Contador</Text>
-            <Text style={styles.headerCellCenter}>Bodecos</Text>
-            <Text style={styles.headerCellCenter}>Pirarucus</Text>
-            <Text style={styles.headerCellCenter}>Total</Text>
-            <Text style={styles.headerCellCenter}>Ação</Text>
-          </View>
-
-          {/* Table Rows */}
-          {manualData.map((row, index) => (
-            <View key={row.id} style={[styles.tableRow, index % 2 === 0 ? styles.evenRow : styles.oddRow]}>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.nameInput}
-                  value={row.contador}
-                  onChangeText={(text) => updateRow(index, 'contador', text)}
-                  placeholder="Nome..."
-                />
-              </View>
-
-              <View style={styles.numberContainer}>
-                <TextInput
-                  style={styles.numberInput}
-                  value={row.bodecos.toString()}
-                  onChangeText={(text) => updateRow(index, 'bodecos', text)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
-              </View>
-
-              <View style={styles.numberContainer}>
-                <TextInput
-                  style={styles.numberInput}
-                  value={row.pirarucus.toString()}
-                  onChangeText={(text) => updateRow(index, 'pirarucus', text)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
-              </View>
-
-              <View style={styles.totalContainer}>
-                <Text style={styles.totalText}>{row.total}</Text>
-              </View>
-
-              <View style={styles.actionContainer}>
-                <TouchableOpacity 
-                  style={styles.deleteButton}
-                  onPress={() => deleteRow(index)}
-                >
-                  <MaterialIcons name="delete" size={20} color="#DC2626" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionSection}>
-          <TouchableOpacity style={styles.addRowButton} onPress={addNewRow}>
-            <MaterialIcons name="add" size={24} color="white" />
-            <Text style={styles.addRowText}>Inserir Próxima Linha</Text>
+        
+        {/* Export All Button */}
+        <View style={styles.exportAllSection}>
+          <TouchableOpacity style={styles.exportAllButton} onPress={() => exportEnvironmentReport()}>
+            <MaterialIcons name="table-chart" size={28} color="white" />
+            <Text style={styles.exportAllText}>Exportar Planilha Completa</Text>
+            <Text style={styles.exportAllSubtext}>Todos os ambientes • Excel/CSV • WhatsApp</Text>
           </TouchableOpacity>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.clearButton} onPress={clearCurrentReport}>
-              <MaterialIcons name="refresh" size={24} color="white" />
-              <Text style={styles.clearButtonText}>Novo Registro</Text>
-            </TouchableOpacity>
+        </View>
 
-            <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
-              <MaterialIcons name="file-download" size={24} color="white" />
-              <Text style={styles.exportButtonText}>Exportar</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Environment Groups Section */}
+        <View style={styles.environmentsSection}>
+          <Text style={styles.sectionTitle}>Contagens por Ambiente ({environmentGroups.length})</Text>
+          
+          {environmentGroups.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="nature" size={64} color="#9CA3AF" />
+              <Text style={styles.emptyStateTitle}>Nenhuma contagem registrada</Text>
+              <Text style={styles.emptyStateText}>
+                Vá para a aba "Contagem" e registre sua primeira contagem de pirarucu.
+              </Text>
+            </View>
+          ) : (
+            environmentGroups.map((envGroup, index) => (
+              <View key={envGroup.ambiente} style={styles.environmentCard}>
+                <View style={styles.environmentHeader}>
+                  <View style={styles.environmentInfo}>
+                    <Text style={styles.environmentName}>{envGroup.ambiente}</Text>
+                    <Text style={styles.environmentStats}>
+                      {envGroup.contadores.length} contadores • {envGroup.sessions.length} sessões
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.exportSingleButton}
+                    onPress={() => exportEnvironmentReport(envGroup)}
+                  >
+                    <MaterialIcons name="file-download" size={20} color="#2563EB" />
+                    <Text style={styles.exportSingleText}>Exportar</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Environment Totals */}
+                <View style={styles.environmentTotals}>
+                  <View style={styles.totalItem}>
+                    <Text style={styles.totalValue}>{envGroup.totalBodecos}</Text>
+                    <Text style={styles.totalLabel}>Bodecos</Text>
+                  </View>
+                  <View style={styles.totalItem}>
+                    <Text style={styles.totalValue}>{envGroup.totalPirarucus}</Text>
+                    <Text style={styles.totalLabel}>Pirarucus</Text>
+                  </View>
+                  <View style={styles.totalItem}>
+                    <Text style={styles.totalValue}>{envGroup.totalGeral}</Text>
+                    <Text style={styles.totalLabel}>Total</Text>
+                  </View>
+                </View>
+
+                {/* Sessions List */}
+                <View style={styles.sessionsContainer}>
+                  <Text style={styles.sessionsTitle}>Detalhes das Contagens:</Text>
+                  {envGroup.sessions.map((session, sessionIndex) => (
+                    <View key={session.id} style={styles.sessionItem}>
+                      <View style={styles.sessionHeader}>
+                        <Text style={styles.sessionContador}>{session.contador}</Text>
+                        <Text style={styles.sessionTime}>{session.horaInicio} - {session.horaFinal}</Text>
+                      </View>
+                      <Text style={styles.sessionSetor}>Setor: {session.setor}</Text>
+                      <View style={styles.sessionStats}>
+                        <Text style={styles.sessionStat}>Bodecos: {session.totalBodeco}</Text>
+                        <Text style={styles.sessionStat}>Pirarucus: {session.totalPirarucu}</Text>
+                        <Text style={styles.sessionStat}>Registros: {session.contagens.length}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Saved Reports Section */}
@@ -554,7 +465,6 @@ export default function RelatorioScreen() {
           </View>
         )}
       </ScrollView>
-      {/* Removed Web Alert Modal */}
     </SafeAreaView>
   );
 }
@@ -577,7 +487,67 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  headerSection: {
+  exportAllSection: {
+    marginBottom: 20,
+  },
+  exportAllButton: {
+    backgroundColor: '#16A34A',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  exportAllText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  exportAllSubtext: {
+    color: '#BBF7D0',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  environmentsSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    marginBottom: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  environmentCard: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
@@ -588,221 +558,105 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E40AF',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  summaryRow: {
+  environmentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  summaryCard: {
-    flex: 1,
     alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 6,
-    marginHorizontal: 2,
+    marginBottom: 16,
   },
-  summaryValue: {
+  environmentInfo: {
+    flex: 1,
+  },
+  environmentName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
   },
-  summaryLabel: {
-    fontSize: 10,
+  environmentStats: {
+    fontSize: 14,
     color: '#6B7280',
-    fontWeight: '600',
     marginTop: 2,
   },
-  tableContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  tableHeader: {
+  exportSingleButton: {
     flexDirection: 'row',
-    backgroundColor: '#1E40AF',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-  },
-  headerCell: {
-    flex: 2.5,
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  headerCellCenter: {
-    flex: 1,
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  tableRow: {
-    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    minHeight: 50,
+    borderRadius: 8,
   },
-  evenRow: {
-    backgroundColor: '#F8FAFC',
+  exportSingleText: {
+    color: '#2563EB',
+    fontWeight: '600',
+    marginLeft: 4,
   },
-  oddRow: {
-    backgroundColor: 'white',
+  environmentTotals: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
   },
-  inputContainer: {
-    flex: 2.5,
-    paddingHorizontal: 4,
-  },
-  nameInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    backgroundColor: '#FFFFFF',
-    minHeight: 36,
-  },
-  numberContainer: {
-    flex: 1,
-    paddingHorizontal: 4,
-  },
-  numberInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-    minHeight: 36,
-  },
-  totalContainer: {
-    flex: 1,
-    paddingHorizontal: 4,
+  totalItem: {
     alignItems: 'center',
   },
-  totalText: {
+  totalValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#166534',
+  },
+  totalLabel: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  sessionsContainer: {
+    marginTop: 8,
+  },
+  sessionsTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1E40AF',
-    textAlign: 'center',
-    minHeight: 36,
-    lineHeight: 36,
-  },
-  actionContainer: {
-    flex: 1,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-  },
-  deleteButton: {
-    backgroundColor: '#FEF2F2',
-    padding: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 36,
-    minHeight: 36,
-  },
-  actionSection: {
-    marginBottom: 24,
-  },
-  addRowButton: {
-    backgroundColor: '#059669',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
+    color: '#374151',
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  addRowText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+  sessionItem: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
   },
-  buttonRow: {
+  sessionHeader: {
     flexDirection: 'row',
-    gap: 12,
-  },  clearButton: {
-    flex: 1,
-    backgroundColor: '#6B7280',
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 4,
   },
-  clearButtonText: {
-    color: 'white',
-    fontSize: 16,
+  sessionContador: {
+    fontSize: 14,
     fontWeight: 'bold',
-    marginLeft: 8,
+    color: '#1F2937',
   },
-  exportButton: {
-    flex: 1,
-    backgroundColor: '#2563EB',
+  sessionTime: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  sessionSetor: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  sessionStats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'space-around',
   },
-  exportButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+  sessionStat: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
   },
   reportsSection: {
     marginBottom: 24,
@@ -812,11 +666,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E40AF',
   },
   filterButton: {
     flexDirection: 'row',
@@ -912,41 +761,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 8,
-    minWidth: 280,
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#1F2937',
-  },
-  modalMessage: {
-    fontSize: 16,
-    marginBottom: 20,
-    color: '#4B5563',
-    lineHeight: 22,
-  },
-  modalButton: {
-    backgroundColor: '#2563EB',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
 });
