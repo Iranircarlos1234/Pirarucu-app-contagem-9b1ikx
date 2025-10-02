@@ -6,9 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Platform,
-  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -46,8 +44,6 @@ export default function RelatorioScreen() {
   const navigation = useNavigation();
   const [environmentGroups, setEnvironmentGroups] = useState<EnvironmentGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterAmbiente, setFilterAmbiente] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -60,7 +56,7 @@ export default function RelatorioScreen() {
     return unsubscribe;
   }, [navigation]);
 
-  // Auto-update every 2 seconds
+  // Auto-update a cada 2 segundos
   useEffect(() => {
     const interval = setInterval(() => {
       loadData();
@@ -88,7 +84,7 @@ export default function RelatorioScreen() {
   const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentGroup[] => {
     const groups: { [key: string]: CountSession[] } = {};
     
-    // Group sessions by environment
+    // Agrupar sessões por ambiente
     sessions.forEach(session => {
       if (!groups[session.ambiente]) {
         groups[session.ambiente] = [];
@@ -96,16 +92,16 @@ export default function RelatorioScreen() {
       groups[session.ambiente].push(session);
     });
 
-    // Convert to EnvironmentGroup format with most recent session
+    // Converter para EnvironmentGroup format com sessão mais recente
     return Object.entries(groups).map(([ambiente, sessions]) => {
-      // Sort sessions by timestamp (most recent first)
+      // Ordenar sessões por timestamp (mais recente primeiro)
       const sortedSessions = sessions.sort((a, b) => {
         const timeA = new Date(`2024-01-01 ${a.horaFinal}`).getTime();
         const timeB = new Date(`2024-01-01 ${b.horaFinal}`).getTime();
         return timeB - timeA;
       });
 
-      const recentSession = sortedSessions[0]; // Most recent session
+      const recentSession = sortedSessions[0]; // Sessão mais recente
       const totalBodecos = sessions.reduce((sum, s) => sum + s.totalBodeco, 0);
       const totalPirarucus = sessions.reduce((sum, s) => sum + s.totalPirarucu, 0);
       const contadores = [...new Set(sessions.map(s => s.contador))];
@@ -168,12 +164,12 @@ export default function RelatorioScreen() {
 
   const generateExportContent = (environmentGroups: EnvironmentGroup[]) => {
     const today = new Date().toLocaleDateString('pt-BR');
-    let content = '\ufeff'; // BOM for Excel UTF-8
+    let content = '\ufeff'; // BOM para Excel UTF-8
     
     content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
     content += `Data de Exportacao: ${today}\n\n`;
     
-    // Summary by environment
+    // Resumo geral por ambiente
     content += 'RESUMO GERAL POR AMBIENTE\n';
     content += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
     
@@ -183,7 +179,7 @@ export default function RelatorioScreen() {
     
     content += '\n';
     
-    // Detailed data by environment
+    // Dados detalhados por ambiente
     let globalOrder = 1;
     
     environmentGroups.forEach(env => {
@@ -246,7 +242,7 @@ export default function RelatorioScreen() {
       content += '\n';
     });
     
-    // Final summary
+    // Resumo final
     const totalGeralBodecos = environmentGroups.reduce((sum, env) => sum + env.totalBodecos, 0);
     const totalGeralPirarucus = environmentGroups.reduce((sum, env) => sum + env.totalPirarucus, 0);
     const totalGeralContadores = environmentGroups.reduce((sum, env) => sum + env.contadores.length, 0);
@@ -273,13 +269,6 @@ export default function RelatorioScreen() {
     window.URL.revokeObjectURL(url);
   };
 
-  const getFilteredEnvironments = () => {
-    return environmentGroups.filter(env => {
-      const matchAmbiente = filterAmbiente === '' || env.ambiente.toLowerCase().includes(filterAmbiente.toLowerCase());
-      return matchAmbiente;
-    });
-  };
-
   const getTotalSummary = () => {
     const totalBodecos = environmentGroups.reduce((sum, env) => sum + env.totalBodecos, 0);
     const totalPirarucus = environmentGroups.reduce((sum, env) => sum + env.totalPirarucus, 0);
@@ -301,7 +290,6 @@ export default function RelatorioScreen() {
     );
   }
 
-  const filteredEnvironments = getFilteredEnvironments();
   const totalSummary = getTotalSummary();
 
   return (
@@ -317,34 +305,11 @@ export default function RelatorioScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Filter Section */}
-        <View style={styles.filterSection}>
-          <View style={styles.filterHeader}>
-            <Text style={styles.sectionTitle}>Contagens por Ambiente ({filteredEnvironments.length})</Text>
-            <TouchableOpacity 
-              style={styles.filterButton}
-              onPress={() => setShowFilters(!showFilters)}
-            >
-              <MaterialIcons name="filter-list" size={24} color="#2563EB" />
-              <Text style={styles.filterButtonText}>Filtrar</Text>
-            </TouchableOpacity>
-          </View>
-
-          {showFilters && (
-            <View style={styles.filterInputSection}>
-              <TextInput
-                style={styles.filterInput}
-                value={filterAmbiente}
-                onChangeText={setFilterAmbiente}
-                placeholder="Filtrar por ambiente..."
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Environment Groups Section */}
-        <View style={styles.environmentsSection}>
-          {filteredEnvironments.length === 0 ? (
+        {/* Current Count Section */}
+        <View style={styles.currentCountSection}>
+          <Text style={styles.sectionTitle}>Novo Relatório - Contagem Atual ({environmentGroups.length})</Text>
+          
+          {environmentGroups.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="nature" size={64} color="#9CA3AF" />
               <Text style={styles.emptyStateTitle}>Nenhuma contagem registrada</Text>
@@ -354,8 +319,8 @@ export default function RelatorioScreen() {
             </View>
           ) : (
             <>
-              {filteredEnvironments.map((envGroup, index) => (
-                <View key={envGroup.ambiente} style={styles.environmentCard}>
+              {environmentGroups.map((envGroup) => (
+                <View key={envGroup.ambiente} style={styles.currentCountCard}>
                   {/* Environment Header - Clickable */}
                   <TouchableOpacity 
                     style={styles.environmentHeader}
@@ -371,7 +336,7 @@ export default function RelatorioScreen() {
                         />
                       </View>
                       <Text style={styles.environmentStats}>
-                        Contagem mais recente • {envGroup.contadores.length} contadores total
+                        Contagem mais recente • Toque para ver histórico completo
                       </Text>
                     </View>
                     <TouchableOpacity 
@@ -386,11 +351,11 @@ export default function RelatorioScreen() {
                     </TouchableOpacity>
                   </TouchableOpacity>
 
-                  {/* Recent Session Info */}
+                  {/* Recent Session Info - Only Current Count */}
                   <View style={styles.recentSessionContainer}>
-                    <Text style={styles.recentSessionTitle}>Contagem Mais Recente:</Text>
+                    <Text style={styles.recentSessionTitle}>Contagem Atual:</Text>
                     <View style={styles.recentSessionInfo}>
-                      <Text style={styles.sessionContador}>📍 {envGroup.recentSession.contador}</Text>
+                      <Text style={styles.sessionContador}>👤 {envGroup.recentSession.contador}</Text>
                       <Text style={styles.sessionTime}>🕐 {envGroup.recentSession.horaInicio} - {envGroup.recentSession.horaFinal}</Text>
                       <Text style={styles.sessionSetor}>🏢 {envGroup.recentSession.setor}</Text>
                     </View>
@@ -411,10 +376,10 @@ export default function RelatorioScreen() {
                     </View>
                   </View>
 
-                  {/* Expanded Sessions List */}
+                  {/* Expanded All Sessions - Only show when expanded */}
                   {envGroup.expanded && (
                     <View style={styles.expandedContainer}>
-                      <Text style={styles.expandedTitle}>Todas as Contagens ({envGroup.allSessions.length}):</Text>
+                      <Text style={styles.expandedTitle}>Histórico Completo ({envGroup.allSessions.length} contagens):</Text>
                       {envGroup.allSessions.map((session, sessionIndex) => (
                         <View key={session.id} style={styles.sessionItem}>
                           <View style={styles.sessionHeader}>
@@ -527,48 +492,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
-  filterSection: {
-    marginBottom: 16,
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  currentCountSection: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1E40AF',
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  filterButtonText: {
-    color: '#2563EB',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  filterInputSection: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-  },
-  filterInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    backgroundColor: '#F9FAFB',
-  },
-  environmentsSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   emptyState: {
     alignItems: 'center',
@@ -594,7 +525,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  environmentCard: {
+  currentCountCard: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
@@ -604,6 +535,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#16A34A',
   },
   environmentHeader: {
     flexDirection: 'row',
@@ -645,7 +578,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   recentSessionContainer: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F0FDF4',
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,
@@ -653,7 +586,7 @@ const styles = StyleSheet.create({
   recentSessionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#374151',
+    color: '#16A34A',
     marginBottom: 12,
   },
   recentSessionInfo: {
@@ -677,7 +610,7 @@ const styles = StyleSheet.create({
   recentSessionTotals: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#DCFCE7',
     borderRadius: 8,
     padding: 16,
   },
