@@ -14,26 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface ManualCountData {
-  id: string;
-  contador: string;
-  bodecos: number;
-  pirarucus: number;
-  total: number;
-}
-
-interface SavedReport {
-  id: string;
-  ambiente: string;
-  contador: string;
-  data: string;
-  hora: string;
-  registros: ManualCountData[];
-  totalBodecos: number;
-  totalPirarucus: number;
-  totalGeral: number;
-}
-
 interface CountSession {
   id: string;
   ambiente: string;
@@ -53,22 +33,21 @@ interface CountSession {
 
 interface EnvironmentGroup {
   ambiente: string;
-  sessions: CountSession[];
+  recentSession: CountSession;
+  allSessions: CountSession[];
   totalBodecos: number;
   totalPirarucus: number;
   totalGeral: number;
   contadores: string[];
+  expanded: boolean;
 }
 
 export default function RelatorioScreen() {
   const navigation = useNavigation();
   const [environmentGroups, setEnvironmentGroups] = useState<EnvironmentGroup[]>([]);
-  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterAmbiente, setFilterAmbiente] = useState('');
-  const [filterContador, setFilterContador] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -91,13 +70,6 @@ export default function RelatorioScreen() {
 
   const loadData = async () => {
     try {
-      // Load saved reports
-      const storedReports = await AsyncStorage.getItem('saved_reports');
-      if (storedReports) {
-        setSavedReports(JSON.parse(storedReports));
-      }
-      
-      // Load and group counting sessions by environment
       const storedSessions = await AsyncStorage.getItem('pirarucu_sessions');
       if (storedSessions) {
         const sessions: CountSession[] = JSON.parse(storedSessions);
@@ -124,21 +96,41 @@ export default function RelatorioScreen() {
       groups[session.ambiente].push(session);
     });
 
-    // Convert to EnvironmentGroup format
+    // Convert to EnvironmentGroup format with most recent session
     return Object.entries(groups).map(([ambiente, sessions]) => {
+      // Sort sessions by timestamp (most recent first)
+      const sortedSessions = sessions.sort((a, b) => {
+        const timeA = new Date(`2024-01-01 ${a.horaFinal}`).getTime();
+        const timeB = new Date(`2024-01-01 ${b.horaFinal}`).getTime();
+        return timeB - timeA;
+      });
+
+      const recentSession = sortedSessions[0]; // Most recent session
       const totalBodecos = sessions.reduce((sum, s) => sum + s.totalBodeco, 0);
       const totalPirarucus = sessions.reduce((sum, s) => sum + s.totalPirarucu, 0);
       const contadores = [...new Set(sessions.map(s => s.contador))];
 
       return {
         ambiente,
-        sessions,
+        recentSession,
+        allSessions: sortedSessions,
         totalBodecos,
         totalPirarucus,
         totalGeral: totalBodecos + totalPirarucus,
-        contadores
+        contadores,
+        expanded: false
       };
     });
+  };
+
+  const toggleEnvironmentExpansion = (ambiente: string) => {
+    setEnvironmentGroups(prev => 
+      prev.map(env => 
+        env.ambiente === ambiente 
+          ? { ...env, expanded: !env.expanded }
+          : env
+      )
+    );
   };
 
   const exportEnvironmentReport = async (environmentGroup?: EnvironmentGroup) => {
@@ -146,10 +138,8 @@ export default function RelatorioScreen() {
       let dataToExport: EnvironmentGroup[];
       
       if (environmentGroup) {
-        // Export single environment
         dataToExport = [environmentGroup];
       } else {
-        // Export all environments
         dataToExport = environmentGroups;
       }
 
@@ -180,7 +170,6 @@ export default function RelatorioScreen() {
     const today = new Date().toLocaleDateString('pt-BR');
     let content = '\ufeff'; // BOM for Excel UTF-8
     
-    // Report header
     content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
     content += `Data de Exportacao: ${today}\n\n`;
     
@@ -201,11 +190,9 @@ export default function RelatorioScreen() {
       content += `\n=== AMBIENTE: ${env.ambiente} ===\n`;
       content += `Resumo: ${env.totalBodecos} bodecos, ${env.totalPirarucus} pirarucus, ${env.contadores.length} contadores\n\n`;
       
-      // Column headers
       content += 'Ordem de Contagem;Data;Ambiente;Nome do Contador;Hora Inicial;Hora Final;Total Minutos;Registro Contagem;Pirarucu;Bodeco;Total\n';
       
-      // Process each session in the environment
-      env.sessions.forEach(session => {
+      env.allSessions.forEach(session => {
         const calculateMinutes = (inicio: string, final: string): number => {
           try {
             const parseTime = (timeStr: string): Date => {
@@ -221,10 +208,10 @@ export default function RelatorioScreen() {
             
             let diffMs = finalTime.getTime() - inicioTime.getTime();
             if (diffMs < 0) {
-              diffMs += 24 * 60 * 60 * 1000; // Add 24 hours if crossed midnight
+              diffMs += 24 * 60 * 60 * 1000;
             }
             
-            return Math.round(diffMs / (1000 * 60)); // Convert to minutes
+            return Math.round(diffMs / (1000 * 60));
           } catch (error) {
             return 0;
           }
@@ -234,7 +221,6 @@ export default function RelatorioScreen() {
         const horaInicial = session.horaInicio.split(' ')[0] || session.horaInicio;
         const horaFinal = session.horaFinal.split(' ')[0] || session.horaFinal;
 
-        // Add each count as a separate row
         session.contagens.forEach(contagem => {
           const values = [
             globalOrder.toString(),
@@ -255,7 +241,6 @@ export default function RelatorioScreen() {
         });
       });
       
-      // Environment totals
       content += '\n';
       content += `TOTAIS ${env.ambiente};;;;;;;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral}\n`;
       content += '\n';
@@ -288,12 +273,22 @@ export default function RelatorioScreen() {
     window.URL.revokeObjectURL(url);
   };
 
-  const getFilteredReports = () => {
-    return savedReports.filter(report => {
-      const matchAmbiente = filterAmbiente === '' || report.ambiente.toLowerCase().includes(filterAmbiente.toLowerCase());
-      const matchContador = filterContador === '' || report.contador.toLowerCase().includes(filterContador.toLowerCase());
-      return matchAmbiente && matchContador;
+  const getFilteredEnvironments = () => {
+    return environmentGroups.filter(env => {
+      const matchAmbiente = filterAmbiente === '' || env.ambiente.toLowerCase().includes(filterAmbiente.toLowerCase());
+      return matchAmbiente;
     });
+  };
+
+  const getTotalSummary = () => {
+    const totalBodecos = environmentGroups.reduce((sum, env) => sum + env.totalBodecos, 0);
+    const totalPirarucus = environmentGroups.reduce((sum, env) => sum + env.totalPirarucus, 0);
+    return {
+      totalBodecos,
+      totalPirarucus,
+      totalGeral: totalBodecos + totalPirarucus,
+      totalAmbientes: environmentGroups.length
+    };
   };
 
   if (loading) {
@@ -306,7 +301,8 @@ export default function RelatorioScreen() {
     );
   }
 
-  const filteredReports = getFilteredReports();
+  const filteredEnvironments = getFilteredEnvironments();
+  const totalSummary = getTotalSummary();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -321,11 +317,34 @@ export default function RelatorioScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Filter Section */}
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.sectionTitle}>Contagens por Ambiente ({filteredEnvironments.length})</Text>
+            <TouchableOpacity 
+              style={styles.filterButton}
+              onPress={() => setShowFilters(!showFilters)}
+            >
+              <MaterialIcons name="filter-list" size={24} color="#2563EB" />
+              <Text style={styles.filterButtonText}>Filtrar</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showFilters && (
+            <View style={styles.filterInputSection}>
+              <TextInput
+                style={styles.filterInput}
+                value={filterAmbiente}
+                onChangeText={setFilterAmbiente}
+                placeholder="Filtrar por ambiente..."
+              />
+            </View>
+          )}
+        </View>
+
         {/* Environment Groups Section */}
         <View style={styles.environmentsSection}>
-          <Text style={styles.sectionTitle}>Contagens por Ambiente ({environmentGroups.length})</Text>
-          
-          {environmentGroups.length === 0 ? (
+          {filteredEnvironments.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="nature" size={64} color="#9CA3AF" />
               <Text style={styles.emptyStateTitle}>Nenhuma contagem registrada</Text>
@@ -334,136 +353,130 @@ export default function RelatorioScreen() {
               </Text>
             </View>
           ) : (
-            environmentGroups.map((envGroup, index) => (
-              <View key={envGroup.ambiente} style={styles.environmentCard}>
-                <View style={styles.environmentHeader}>
-                  <View style={styles.environmentInfo}>
-                    <Text style={styles.environmentName}>{envGroup.ambiente}</Text>
-                    <Text style={styles.environmentStats}>
-                      {envGroup.contadores.length} contadores • {envGroup.sessions.length} sessões
-                    </Text>
-                  </View>
+            <>
+              {filteredEnvironments.map((envGroup, index) => (
+                <View key={envGroup.ambiente} style={styles.environmentCard}>
+                  {/* Environment Header - Clickable */}
                   <TouchableOpacity 
-                    style={styles.exportSingleButton}
-                    onPress={() => exportEnvironmentReport(envGroup)}
+                    style={styles.environmentHeader}
+                    onPress={() => toggleEnvironmentExpansion(envGroup.ambiente)}
                   >
-                    <MaterialIcons name="file-download" size={20} color="#2563EB" />
-                    <Text style={styles.exportSingleText}>Exportar</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Environment Totals */}
-                <View style={styles.environmentTotals}>
-                  <View style={styles.totalItem}>
-                    <Text style={styles.totalValue}>{envGroup.totalBodecos}</Text>
-                    <Text style={styles.totalLabel}>Bodecos</Text>
-                  </View>
-                  <View style={styles.totalItem}>
-                    <Text style={styles.totalValue}>{envGroup.totalPirarucus}</Text>
-                    <Text style={styles.totalLabel}>Pirarucus</Text>
-                  </View>
-                  <View style={styles.totalItem}>
-                    <Text style={styles.totalValue}>{envGroup.totalGeral}</Text>
-                    <Text style={styles.totalLabel}>Total</Text>
-                  </View>
-                </View>
-
-                {/* Sessions List */}
-                <View style={styles.sessionsContainer}>
-                  <Text style={styles.sessionsTitle}>Detalhes das Contagens:</Text>
-                  {envGroup.sessions.map((session, sessionIndex) => (
-                    <View key={session.id} style={styles.sessionItem}>
-                      <View style={styles.sessionHeader}>
-                        <Text style={styles.sessionContador}>{session.contador}</Text>
-                        <Text style={styles.sessionTime}>{session.horaInicio} - {session.horaFinal}</Text>
+                    <View style={styles.environmentInfo}>
+                      <View style={styles.environmentTitleRow}>
+                        <Text style={styles.environmentName}>{envGroup.ambiente}</Text>
+                        <MaterialIcons 
+                          name={envGroup.expanded ? "expand-less" : "expand-more"} 
+                          size={24} 
+                          color="#2563EB" 
+                        />
                       </View>
-                      <Text style={styles.sessionSetor}>Setor: {session.setor}</Text>
-                      <View style={styles.sessionStats}>
-                        <Text style={styles.sessionStat}>Bodecos: {session.totalBodeco}</Text>
-                        <Text style={styles.sessionStat}>Pirarucus: {session.totalPirarucu}</Text>
-                        <Text style={styles.sessionStat}>Registros: {session.contagens.length}</Text>
+                      <Text style={styles.environmentStats}>
+                        Contagem mais recente • {envGroup.contadores.length} contadores total
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.exportSingleButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        exportEnvironmentReport(envGroup);
+                      }}
+                    >
+                      <MaterialIcons name="file-download" size={20} color="#2563EB" />
+                      <Text style={styles.exportSingleText}>Exportar</Text>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+
+                  {/* Recent Session Info */}
+                  <View style={styles.recentSessionContainer}>
+                    <Text style={styles.recentSessionTitle}>Contagem Mais Recente:</Text>
+                    <View style={styles.recentSessionInfo}>
+                      <Text style={styles.sessionContador}>📍 {envGroup.recentSession.contador}</Text>
+                      <Text style={styles.sessionTime}>🕐 {envGroup.recentSession.horaInicio} - {envGroup.recentSession.horaFinal}</Text>
+                      <Text style={styles.sessionSetor}>🏢 {envGroup.recentSession.setor}</Text>
+                    </View>
+                    
+                    <View style={styles.recentSessionTotals}>
+                      <View style={styles.totalItem}>
+                        <Text style={styles.totalValue}>{envGroup.recentSession.totalBodeco}</Text>
+                        <Text style={styles.totalLabel}>Bodecos</Text>
+                      </View>
+                      <View style={styles.totalItem}>
+                        <Text style={styles.totalValue}>{envGroup.recentSession.totalPirarucu}</Text>
+                        <Text style={styles.totalLabel}>Pirarucus</Text>
+                      </View>
+                      <View style={styles.totalItem}>
+                        <Text style={styles.totalValue}>{envGroup.recentSession.contagens.length}</Text>
+                        <Text style={styles.totalLabel}>Registros</Text>
                       </View>
                     </View>
-                  ))}
+                  </View>
+
+                  {/* Expanded Sessions List */}
+                  {envGroup.expanded && (
+                    <View style={styles.expandedContainer}>
+                      <Text style={styles.expandedTitle}>Todas as Contagens ({envGroup.allSessions.length}):</Text>
+                      {envGroup.allSessions.map((session, sessionIndex) => (
+                        <View key={session.id} style={styles.sessionItem}>
+                          <View style={styles.sessionHeader}>
+                            <Text style={styles.sessionContador}>👤 {session.contador}</Text>
+                            <Text style={styles.sessionTime}>🕐 {session.horaInicio} - {session.horaFinal}</Text>
+                          </View>
+                          <Text style={styles.sessionSetor}>🏢 {session.setor}</Text>
+                          <View style={styles.sessionStats}>
+                            <Text style={styles.sessionStat}>🐟 Bodecos: {session.totalBodeco}</Text>
+                            <Text style={styles.sessionStat}>🐠 Pirarucus: {session.totalPirarucu}</Text>
+                            <Text style={styles.sessionStat}>📊 Registros: {session.contagens.length}</Text>
+                          </View>
+                        </View>
+                      ))}
+                      
+                      {/* Environment Total Summary */}
+                      <View style={styles.environmentTotalSummary}>
+                        <Text style={styles.totalSummaryTitle}>Total do Ambiente {envGroup.ambiente}:</Text>
+                        <View style={styles.totalSummaryStats}>
+                          <View style={styles.totalSummaryItem}>
+                            <Text style={styles.totalSummaryValue}>{envGroup.totalBodecos}</Text>
+                            <Text style={styles.totalSummaryLabel}>Total Bodecos</Text>
+                          </View>
+                          <View style={styles.totalSummaryItem}>
+                            <Text style={styles.totalSummaryValue}>{envGroup.totalPirarucus}</Text>
+                            <Text style={styles.totalSummaryLabel}>Total Pirarucus</Text>
+                          </View>
+                          <View style={styles.totalSummaryItem}>
+                            <Text style={styles.totalSummaryValue}>{envGroup.totalGeral}</Text>
+                            <Text style={styles.totalSummaryLabel}>Total Geral</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  )}
                 </View>
+              ))}
+
+              {/* Final Total Summary */}
+              <View style={styles.finalTotalContainer}>
+                <Text style={styles.finalTotalTitle}>SOMA TOTAL DE TODOS OS AMBIENTES</Text>
+                <View style={styles.finalTotalStats}>
+                  <View style={styles.finalTotalItem}>
+                    <Text style={styles.finalTotalValue}>{totalSummary.totalBodecos}</Text>
+                    <Text style={styles.finalTotalLabel}>Total Bodecos</Text>
+                  </View>
+                  <View style={styles.finalTotalItem}>
+                    <Text style={styles.finalTotalValue}>{totalSummary.totalPirarucus}</Text>
+                    <Text style={styles.finalTotalLabel}>Total Pirarucus</Text>
+                  </View>
+                  <View style={styles.finalTotalItem}>
+                    <Text style={styles.finalTotalValue}>{totalSummary.totalGeral}</Text>
+                    <Text style={styles.finalTotalLabel}>TOTAL GERAL</Text>
+                  </View>
+                </View>
+                <Text style={styles.finalTotalSubtext}>
+                  {totalSummary.totalAmbientes} ambientes • Dados atualizados automaticamente
+                </Text>
               </View>
-            ))
+            </>
           )}
         </View>
-
-        {/* Saved Reports Section */}
-        {savedReports.length > 0 && (
-          <View style={styles.reportsSection}>
-            <View style={styles.reportsHeader}>
-              <Text style={styles.sectionTitle}>Relatórios Salvos ({savedReports.length})</Text>
-              <TouchableOpacity 
-                style={styles.filterButton}
-                onPress={() => setShowFilters(!showFilters)}
-              >
-                <MaterialIcons name="filter-list" size={24} color="#2563EB" />
-                <Text style={styles.filterButtonText}>Filtrar</Text>
-              </TouchableOpacity>
-            </View>
-
-            {showFilters && (
-              <View style={styles.filterSection}>
-                <View style={styles.filterRow}>
-                  <View style={styles.filterGroup}>
-                    <Text style={styles.filterLabel}>Ambiente:</Text>
-                    <TextInput
-                      style={styles.filterInput}
-                      value={filterAmbiente}
-                      onChangeText={setFilterAmbiente}
-                      placeholder="Filtrar por ambiente..."
-                    />
-                  </View>
-                  <View style={styles.filterGroup}>
-                    <Text style={styles.filterLabel}>Contador:</Text>
-                    <TextInput
-                      style={styles.filterInput}
-                      value={filterContador}
-                      onChangeText={setFilterContador}
-                      placeholder="Filtrar por contador..."
-                    />
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {filteredReports.map((report) => (
-              <View key={report.id} style={styles.reportCard}>
-                <View style={styles.reportHeader}>
-                  <View>
-                    <Text style={styles.reportAmbiente}>{report.ambiente}</Text>
-                    <Text style={styles.reportContador}>Responsável: {report.contador}</Text>
-                  </View>
-                  <View style={styles.reportDate}>
-                    <Text style={styles.reportDateText}>{report.data}</Text>
-                    <Text style={styles.reportTimeText}>{report.hora}</Text>
-                  </View>
-                </View>
-                <View style={styles.reportStats}>
-                  <View style={styles.reportStat}>
-                    <Text style={styles.reportStatValue}>{report.registros.length}</Text>
-                    <Text style={styles.reportStatLabel}>Contadores</Text>
-                  </View>
-                  <View style={styles.reportStat}>
-                    <Text style={styles.reportStatValue}>{report.totalBodecos}</Text>
-                    <Text style={styles.reportStatLabel}>Bodecos</Text>
-                  </View>
-                  <View style={styles.reportStat}>
-                    <Text style={styles.reportStatValue}>{report.totalPirarucus}</Text>
-                    <Text style={styles.reportStatLabel}>Pirarucus</Text>
-                  </View>
-                  <View style={styles.reportStat}>
-                    <Text style={styles.reportStatValue}>{report.totalGeral}</Text>
-                    <Text style={styles.reportStatLabel}>Total</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -514,14 +527,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
-  environmentsSection: {
-    marginBottom: 24,
+  filterSection: {
+    marginBottom: 16,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1E40AF',
-    marginBottom: 16,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  filterButtonText: {
+    color: '#2563EB',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  filterInputSection: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+  },
+  filterInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    backgroundColor: '#F9FAFB',
+  },
+  environmentsSection: {
+    marginBottom: 24,
   },
   emptyState: {
     alignItems: 'center',
@@ -567,15 +614,21 @@ const styles = StyleSheet.create({
   environmentInfo: {
     flex: 1,
   },
+  environmentTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   environmentName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
+    flex: 1,
   },
   environmentStats: {
     fontSize: 14,
     color: '#6B7280',
-    marginTop: 2,
+    marginTop: 4,
   },
   exportSingleButton: {
     flexDirection: 'row',
@@ -584,19 +637,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+    marginLeft: 12,
   },
   exportSingleText: {
     color: '#2563EB',
     fontWeight: '600',
     marginLeft: 4,
   },
-  environmentTotals: {
+  recentSessionContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  recentSessionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  recentSessionInfo: {
+    marginBottom: 16,
+  },
+  sessionContador: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  sessionTime: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  sessionSetor: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  recentSessionTotals: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     backgroundColor: '#F0FDF4',
     borderRadius: 8,
     padding: 16,
-    marginBottom: 16,
   },
   totalItem: {
     alignItems: 'center',
@@ -612,10 +695,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
-  sessionsContainer: {
-    marginTop: 8,
+  expandedContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 16,
   },
-  sessionsTitle: {
+  expandedTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#374151',
@@ -633,133 +718,87 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  sessionContador: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  sessionTime: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  sessionSetor: {
-    fontSize: 12,
-    color: '#6B7280',
     marginBottom: 8,
   },
   sessionStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginTop: 8,
   },
   sessionStat: {
     fontSize: 12,
     color: '#374151',
     fontWeight: '600',
   },
-  reportsSection: {
-    marginBottom: 24,
-  },
-  reportsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  environmentTotalSummary: {
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 8,
-  },
-  filterButtonText: {
-    color: '#2563EB',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  filterSection: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  filterGroup: {
-    flex: 1,
-  },
-  filterLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  filterInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    backgroundColor: '#F9FAFB',
-  },
-  reportCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 12,
   },
-  reportHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  reportAmbiente: {
+  totalSummaryTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#1E40AF',
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  reportContador: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  reportDate: {
-    alignItems: 'flex-end',
-  },
-  reportDateText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  reportTimeText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  reportStats: {
+  totalSummaryStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
-  reportStat: {
+  totalSummaryItem: {
     alignItems: 'center',
   },
-  reportStatValue: {
+  totalSummaryValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#059669',
+    color: '#1E40AF',
   },
-  reportStatLabel: {
+  totalSummaryLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#1E40AF',
     fontWeight: '600',
+    marginTop: 4,
+  },
+  finalTotalContainer: {
+    backgroundColor: '#16A34A',
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  finalTotalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  finalTotalStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 12,
+  },
+  finalTotalItem: {
+    alignItems: 'center',
+  },
+  finalTotalValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  finalTotalLabel: {
+    fontSize: 14,
+    color: '#BBF7D0',
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  finalTotalSubtext: {
+    fontSize: 14,
+    color: '#BBF7D0',
+    textAlign: 'center',
   },
 });
