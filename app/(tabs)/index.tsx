@@ -67,9 +67,10 @@ export default function CountingScreen() {
   const [receivedDataPreview, setReceivedDataPreview] = useState<any>(null);
   
   // Principal/Emissor system
-  const [isPrincipal, setIsPrincipal] = useState(false);
+    const [isPrincipal, setIsPrincipal] = useState(false);
   const [connectedEmissors, setConnectedEmissors] = useState<BluetoothDevice[]>([]);
   const [autoCollecting, setAutoCollecting] = useState(false);
+  const [showPrincipalConfirm, setShowPrincipalConfirm] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -125,13 +126,17 @@ export default function CountingScreen() {
     const code = `${timestamp.slice(-4)}${random}`;
     setEmissorCode(code);
   };
-
-  const becomePrincipal = async () => {
+  const confirmBecomePrincipal = () => {
     if (isActive) {
       console.log('⚠️ Não é possível se tornar principal durante contagem ativa');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
+    setShowPrincipalConfirm(true);
+  };
+
+  const becomePrincipal = async () => {
+    setShowPrincipalConfirm(false);
 
     try {
       setIsPrincipal(true);
@@ -659,26 +664,46 @@ export default function CountingScreen() {
                   </Text>
                 </View>
               )}
-              
-              <TouchableOpacity 
-                style={[
-                  styles.syncButton, 
-                  styles.receiveButton, 
-                  isPrincipal && styles.principalButton,
-                  isActive && styles.disabledButton
-                ]} 
-                onPress={receiveData}
-                disabled={isActive}
-              >
-                <MaterialIcons 
-                  name={isPrincipal ? "stars" : "file-download"} 
-                  size={20} 
-                  color="white" 
-                />
-                <Text style={styles.syncButtonText}>
-                  {isPrincipal ? 'PRINCIPAL ATIVO' : 'Receber & Ser Principal'}
-                </Text>
-              </TouchableOpacity>
+                            {!isPrincipal ? (
+                <TouchableOpacity 
+                  style={[
+                    styles.syncButton, 
+                    styles.receiveButton,
+                    isActive && styles.disabledButton
+                  ]} 
+                  onPress={confirmBecomePrincipal}
+                  disabled={isActive}
+                >
+                  <MaterialIcons 
+                    name="stars" 
+                    size={20} 
+                    color="white" 
+                  />
+                  <Text style={styles.syncButtonText}>
+                    Tornar-se Principal
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.principalActiveContainer}>
+                  <View style={styles.principalActiveStatus}>
+                    <MaterialIcons name="stars" size={20} color="#16A34A" />
+                    <Text style={styles.principalActiveText}>PRINCIPAL ATIVO</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.backToPrincipalButton}
+                    onPress={() => {
+                      setIsPrincipal(false);
+                      setConnectedEmissors([]);
+                      setAutoCollecting(false);
+                      setSyncStatus('Pronto para sincronização');
+                      console.log('🔙 Voltou ao modo normal');
+                    }}
+                  >
+                    <MaterialIcons name="arrow-back" size={18} color="white" />
+                    <Text style={styles.backToPrincipalText}>Voltar</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             <View style={styles.syncItem}>
@@ -936,8 +961,66 @@ export default function CountingScreen() {
             <MaterialIcons name="delete-forever" size={24} color="white" />
             <Text style={styles.resetAllText}>Apagar Todos os Dados</Text>
           </TouchableOpacity>
+        </View>      </ScrollView>
+
+      {/* Principal Confirmation Modal */}
+      <Modal visible={showPrincipalConfirm} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialIcons name="stars" size={32} color="#F59E0B" />
+              <Text style={styles.modalTitle}>Tornar-se Receptor Principal?</Text>
+            </View>
+            
+            <Text style={styles.modalDescription}>
+              Como receptor principal, este dispositivo irá:
+            </Text>
+            
+            <View style={styles.modalFeatures}>
+              <View style={styles.modalFeature}>
+                <MaterialIcons name="check-circle" size={20} color="#16A34A" />
+                <Text style={styles.modalFeatureText}>
+                  Coletar dados automaticamente de outros dispositivos
+                </Text>
+              </View>
+              <View style={styles.modalFeature}>
+                <MaterialIcons name="check-circle" size={20} color="#16A34A" />
+                <Text style={styles.modalFeatureText}>
+                  Centralizar todas as contagens
+                </Text>
+              </View>
+              <View style={styles.modalFeature}>
+                <MaterialIcons name="check-circle" size={20} color="#16A34A" />
+                <Text style={styles.modalFeatureText}>
+                  Gerar relatório consolidado
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.modalWarning}>
+              ⚠️ Outros dispositivos conectados se tornarão emissores automaticamente
+            </Text>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => setShowPrincipalConfirm(false)}
+              >
+                <MaterialIcons name="close" size={20} color="#6B7280" />
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.modalConfirmButton}
+                onPress={becomePrincipal}
+              >
+                <MaterialIcons name="stars" size={20} color="white" />
+                <Text style={styles.modalConfirmText}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1520,11 +1603,142 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  resetAllText: {
+  },  resetAllText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  principalActiveContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#BBF7D0',
+  },
+  principalActiveStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  principalActiveText: {
+    color: '#16A34A',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  backToPrincipalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6B7280',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  backToPrincipalText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  modalDescription: {
+    fontSize: 16,
+    color: '#374151',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalFeatures: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  modalFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalFeatureText: {
+    fontSize: 14,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
+  modalWarning: {
+    fontSize: 14,
+    color: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  modalCancelText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  modalConfirmButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F59E0B',
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  modalConfirmText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 6,
   },
 });
