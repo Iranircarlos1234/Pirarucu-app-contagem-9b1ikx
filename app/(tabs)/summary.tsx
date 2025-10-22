@@ -564,16 +564,29 @@ export default function SummaryScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
+                {/* Action Buttons */}
         <View style={styles.actionsSection}>
           <TouchableOpacity style={styles.exportButton} onPress={exportData}>
             <MaterialIcons name="file-download" size={24} color="white" />
             <Text style={styles.exportButtonText}>Exportar Dados</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.clearButton} onPress={clearAllData}>
-            <MaterialIcons name="delete" size={24} color="white" />
-            <Text style={styles.clearButtonText}>Limpar Dados</Text>
+          <TouchableOpacity 
+            style={styles.clearButton} 
+            onPress={async () => {
+              try {
+                await AsyncStorage.removeItem('pirarucu_sessions');
+                await AsyncStorage.removeItem('saved_summaries');
+                setSessions([]);
+                setSavedSummaries([]);
+                console.log('✅ Todos os dados do resumo foram apagados');
+              } catch (error) {
+                console.log('❌ Erro ao apagar dados:', error);
+              }
+            }}
+          >
+            <MaterialIcons name="delete-forever" size={24} color="white" />
+            <Text style={styles.clearButtonText}>Apagar Todos os Dados</Text>
           </TouchableOpacity>
         </View>
 

@@ -916,7 +916,27 @@ export default function CountingScreen() {
               Contagens registradas: {contagens.length}
             </Text>
           </View>
-        )}
+                )}
+
+        {/* Reset Button */}
+        <View style={styles.resetSection}>
+          <TouchableOpacity 
+            style={styles.resetAllButton} 
+            onPress={async () => {
+              try {
+                await AsyncStorage.removeItem('pirarucu_sessions');
+                setSessions([]);
+                resetSession();
+                console.log('✅ Todos os dados foram apagados');
+              } catch (error) {
+                console.log('❌ Erro ao apagar dados:', error);
+              }
+            }}
+          >
+            <MaterialIcons name="delete-forever" size={24} color="white" />
+            <Text style={styles.resetAllText}>Apagar Todos os Dados</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1483,5 +1503,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
     fontWeight: '500',
+  },
+  resetSection: {
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  resetAllButton: {
+    backgroundColor: '#DC2626',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resetAllText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });

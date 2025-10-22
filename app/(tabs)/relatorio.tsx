@@ -296,12 +296,28 @@ export default function RelatorioScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         
-        {/* Export All Button */}
+                {/* Export All Button */}
         <View style={styles.exportAllSection}>
           <TouchableOpacity style={styles.exportAllButton} onPress={() => exportEnvironmentReport()}>
             <MaterialIcons name="table-chart" size={28} color="white" />
             <Text style={styles.exportAllText}>Exportar Planilha Completa</Text>
             <Text style={styles.exportAllSubtext}>Todos os ambientes • Excel/CSV • WhatsApp</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.resetAllButton} 
+            onPress={async () => {
+              try {
+                await AsyncStorage.removeItem('pirarucu_sessions');
+                await loadData();
+                console.log('✅ Todos os dados do relatório foram apagados');
+              } catch (error) {
+                console.log('❌ Erro ao apagar dados:', error);
+              }
+            }}
+          >
+            <MaterialIcons name="delete-forever" size={24} color="white" />
+            <Text style={styles.resetAllText}>Apagar Todos os Dados</Text>
           </TouchableOpacity>
         </View>
 
@@ -491,6 +507,26 @@ const styles = StyleSheet.create({
     color: '#BBF7D0',
     fontSize: 14,
     marginTop: 4,
+  },
+  resetAllButton: {
+    backgroundColor: '#DC2626',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  resetAllText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
   currentCountSection: {
     marginBottom: 24,

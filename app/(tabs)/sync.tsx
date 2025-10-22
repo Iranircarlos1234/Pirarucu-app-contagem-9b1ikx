@@ -814,7 +814,7 @@ export default function SyncScreen() {
           </Text>
         </View>
 
-        {/* Quick Actions */}
+                {/* Quick Actions */}
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Sincronização Rápida</Text>
           
@@ -831,6 +831,26 @@ export default function SyncScreen() {
           <TouchableOpacity style={[styles.actionButton, styles.exportButton]} onPress={prepareExportData}>
             <MaterialIcons name="code" size={24} color="white" />
             <Text style={styles.actionButtonText}>Gerar Código de Exportação</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.resetButton]} 
+            onPress={async () => {
+              try {
+                await AsyncStorage.removeItem('pirarucu_sessions');
+                await AsyncStorage.removeItem('connected_devices');
+                await AsyncStorage.removeItem('known_devices');
+                setSessions([]);
+                setConnectedDevices([]);
+                setAvailableDevices([]);
+                console.log('✅ Todos os dados de sincronização foram apagados');
+              } catch (error) {
+                console.log('❌ Erro ao apagar dados:', error);
+              }
+            }}
+          >
+            <MaterialIcons name="delete-forever" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Apagar Todos os Dados</Text>
           </TouchableOpacity>
         </View>
 
@@ -1328,6 +1348,9 @@ const styles = StyleSheet.create({
   },
   exportButton: {
     backgroundColor: '#059669',
+  },
+  resetButton: {
+    backgroundColor: '#DC2626',
   },
   actionButtonText: {
     color: 'white',
