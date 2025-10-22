@@ -49,11 +49,15 @@ export default function RelatorioScreen() {
     loadData();
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = navigation?.addListener?.('focus', () => {
+    useEffect(() => {
+    const unsubscribe = navigation?.addListener('focus', () => {
       loadData();
     });
-    return unsubscribe;
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [navigation]);
 
   // Auto-update a cada 2 segundos
@@ -129,7 +133,7 @@ export default function RelatorioScreen() {
     );
   };
 
-  const exportEnvironmentReport = async (environmentGroup?: EnvironmentGroup) => {
+    const exportEnvironmentReport = async (environmentGroup?: EnvironmentGroup) => {
     try {
       let dataToExport: EnvironmentGroup[];
       
@@ -140,6 +144,7 @@ export default function RelatorioScreen() {
       }
 
       if (dataToExport.length === 0) {
+        console.log('ℹ️ Nenhum dado para exportar');
         return;
       }
 

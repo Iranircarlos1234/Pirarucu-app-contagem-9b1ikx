@@ -71,11 +71,15 @@ export default function SummaryScreen() {
     loadSessions();
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = navigation?.addListener?.('focus', () => {
+    useEffect(() => {
+    const unsubscribe = navigation?.addListener('focus', () => {
       loadSessions();
     });
-    return unsubscribe;
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [navigation]);
 
   // Auto-save a cada 2 segundos
@@ -233,9 +237,10 @@ export default function SummaryScreen() {
     }
   };
 
-  const exportData = async () => {
+    const exportData = async () => {
     try {
       if (sessions.length === 0) {
+        console.log('ℹ️ Nenhum dado para exportar');
         return;
       }
 

@@ -135,8 +135,14 @@ export default function CountingScreen() {
     setShowPrincipalConfirm(true);
   };
 
-  const becomePrincipal = async () => {
+    const becomePrincipal = async () => {
     setShowPrincipalConfirm(false);
+
+    if (isActive) {
+      console.log('⚠️ Não é possível se tornar principal durante contagem ativa');
+      setSyncStatus('Pare a contagem primeiro');
+      return;
+    }
 
     try {
       setIsPrincipal(true);
@@ -247,6 +253,13 @@ export default function CountingScreen() {
   const receiveData = async () => {
     if (!receptorData.trim()) {
       console.log('❌ Nenhum código inserido');
+      setSyncStatus('❌ Nenhum código inserido');
+      return;
+    }
+
+    if (isActive) {
+      console.log('⚠️ Pare a contagem antes de receber dados');
+      setSyncStatus('Pare a contagem primeiro');
       return;
     }
 
@@ -287,8 +300,14 @@ export default function CountingScreen() {
     try {
       setSyncStatus('Preparando dados...');
       
-      const sessions = await AsyncStorage.getItem('pirarucu_sessions');
-      const sessionsData = sessions ? JSON.parse(sessions) : [];
+      const sessionsJson = await AsyncStorage.getItem('pirarucu_sessions');
+      const sessionsData = sessionsJson ? JSON.parse(sessionsJson) : [];
+      
+      if (sessionsData.length === 0) {
+        console.log('ℹ️ Nenhum dado para enviar');
+        setSyncStatus('Nenhum dado para enviar');
+        return;
+      }
       
       const dataToSend = {
         contagens: sessionsData,

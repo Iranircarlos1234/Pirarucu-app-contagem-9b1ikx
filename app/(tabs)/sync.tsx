@@ -282,8 +282,8 @@ export default function SyncScreen() {
     return getExportSummaryUtil(sessions);
   };
 
-  const connectToDevice = async (device: AvailableDevice) => {
-    if (device.status === 'connecting') return;
+    const connectToDevice = async (device: AvailableDevice) => {
+    if (device.status === 'connecting' || !device || !device.id) return;
 
     try {
       // Update device status to connecting
@@ -396,6 +396,7 @@ export default function SyncScreen() {
 
   const disconnectDevice = async (deviceId: string) => {
     try {
+      if (!deviceId) return;
       const deviceToDisconnect = connectedDevices.find(d => d.id === deviceId);
       if (!deviceToDisconnect) return;
 

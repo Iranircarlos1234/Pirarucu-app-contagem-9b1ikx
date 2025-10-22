@@ -153,9 +153,9 @@ export const generateXLSXContent = (sessions: CountSession[]): string => {
   let content = '\ufeff'; // BOM para Excel UTF-8
   let globalOrder = 1;
   
-  // Cabeçalho do relatório
+    // Cabeçalho do relatório
   content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
-  content += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`; // FIX: Changed ' to ` to close the template literal
+  content += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
   
   // Resumo geral por ambiente
   content += 'RESUMO GERAL POR AMBIENTE\n';
