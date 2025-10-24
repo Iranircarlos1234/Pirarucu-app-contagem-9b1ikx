@@ -68,10 +68,9 @@ export default function CountingScreen() {
   const [showPrincipalConfirm, setShowPrincipalConfirm] = useState(false);
   
   // Principal/Emissor system
-  const [isPrincipal, setIsPrincipal] = useState(false);
+    const [isPrincipal, setIsPrincipal] = useState(false);
   const [connectedEmissors, setConnectedEmissors] = useState<BluetoothDevice[]>([]);
   const [autoCollecting, setAutoCollecting] = useState(false);
-  const [showPrincipalConfirm, setShowPrincipalConfirm] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
