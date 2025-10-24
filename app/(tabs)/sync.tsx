@@ -74,7 +74,6 @@ export default function SyncScreen() {
   const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
   const [lastScanTime, setLastScanTime] = useState<string>('');
   
-  // Device identification
   const [deviceInfo, setDeviceInfo] = useState({
     id: '',
     name: '',
@@ -91,7 +90,7 @@ export default function SyncScreen() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation?.addListener?.('focus', () => {
+    const unsubscribe = navigation.addListener('focus', () => {
       loadData();
       loadConnectedDevices();
       refreshDeviceConnections();
@@ -99,7 +98,6 @@ export default function SyncScreen() {
     return unsubscribe;
   }, [navigation]);
 
-  // Auto-refresh connected devices every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       refreshDeviceConnections();
@@ -113,15 +111,14 @@ export default function SyncScreen() {
       let storedDeviceInfo = await AsyncStorage.getItem('device_info');
       
       if (!storedDeviceInfo) {
-        // Create new device ID with better uniqueness
         const timestamp = Date.now();
         const random = Math.random().toString(36).substr(2, 4).toUpperCase();
-        const newDeviceId = `DEV_${timestamp.toString(36).toUpperCase()}_${random}`;
+        const newDeviceId = 'DEV_' + timestamp.toString(36).toUpperCase() + '_' + random;
         const macAddress = generateMockMacAddress();
         
         const newDeviceInfo = {
           id: newDeviceId,
-          name: `Contador ${newDeviceId.slice(-4)}`,
+          name: 'Contador ' + newDeviceId.slice(-4),
           macAddress,
           deviceType: Platform.OS,
           createdAt: new Date().toISOString()
@@ -136,12 +133,11 @@ export default function SyncScreen() {
       
       generateSyncCode();
     } catch (error) {
-      console.log('Erro ao inicializar dispositivo:', error);
-      // Fallback device info
-      const fallbackId = `DEV_${Date.now().toString(36).toUpperCase()}`;
+      console.log('Erro ao inicializar dispositivo');
+      const fallbackId = 'DEV_' + Date.now().toString(36).toUpperCase();
       setDeviceInfo({
         id: fallbackId,
-        name: `Contador ${fallbackId.slice(-4)}`,
+        name: 'Contador ' + fallbackId.slice(-4),
         macAddress: generateMockMacAddress(),
         deviceType: Platform.OS,
         isEditing: false
@@ -166,7 +162,7 @@ export default function SyncScreen() {
       await AsyncStorage.setItem('device_info', JSON.stringify(updatedInfo));
       setDeviceInfo(updatedInfo);
     } catch (error) {
-      console.log('Erro ao atualizar nome:', error);
+      console.log('Erro ao atualizar nome');
     }
   };
 
@@ -177,7 +173,7 @@ export default function SyncScreen() {
         setSessions(JSON.parse(storedSessions));
       }
     } catch (error) {
-      console.log('Erro ao carregar dados:', error);
+      console.log('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -188,7 +184,6 @@ export default function SyncScreen() {
       const storedDevices = await AsyncStorage.getItem('connected_devices');
       if (storedDevices) {
         const devices = JSON.parse(storedDevices);
-        // Update last seen time for connected devices
         const updatedDevices = devices.map((device: ConnectedDevice) => ({
           ...device,
           status: Math.random() > 0.3 ? 'autonomous' : 'offline' as 'autonomous' | 'offline'
@@ -196,7 +191,7 @@ export default function SyncScreen() {
         setConnectedDevices(updatedDevices);
       }
     } catch (error) {
-      console.log('Erro ao carregar dispositivos conectados:', error);
+      console.log('Erro ao carregar dispositivos conectados');
     }
   };
 
@@ -205,17 +200,16 @@ export default function SyncScreen() {
       await AsyncStorage.setItem('connected_devices', JSON.stringify(devices));
       setConnectedDevices(devices);
     } catch (error) {
-      console.log('Erro ao salvar dispositivos conectados:', error);
+      console.log('Erro ao salvar dispositivos conectados');
     }
   };
 
   const refreshDeviceConnections = async () => {
     try {
-      // Simulate checking device connectivity
       const updatedDevices = connectedDevices.map(device => ({
         ...device,
         status: Math.random() > 0.7 ? 'offline' : 'autonomous' as 'offline' | 'autonomous',
-        signalStrength: Math.floor(Math.random() * 40) + 60, // 60-100%
+        signalStrength: Math.floor(Math.random() * 40) + 60,
         lastSync: Math.random() > 0.8 ? new Date().toLocaleTimeString('pt-BR') : device.lastSync
       }));
       
@@ -223,41 +217,39 @@ export default function SyncScreen() {
         await saveConnectedDevices(updatedDevices);
       }
     } catch (error) {
-      console.log('Erro ao atualizar conexões:', error);
+      console.log('Erro ao atualizar conexoes');
     }
   };
 
   const updateDeviceSignals = () => {
     setAvailableDevices(prev => prev.map(device => ({
       ...device,
-      signal: Math.max(30, Math.floor(Math.random() * 70) + 30) // 30-100
+      signal: Math.max(30, Math.floor(Math.random() * 70) + 30)
     })));
   };
 
   const startAutoReconnection = () => {
-    // Simulate auto-reconnection attempts for known devices
     setInterval(async () => {
       try {
         const knownDevices = await AsyncStorage.getItem('known_devices');
         if (knownDevices) {
           const devices = JSON.parse(knownDevices);
-          // Simulate some devices coming back online
           const reconnectedDevices = devices.filter(() => Math.random() > 0.9);
           
           if (reconnectedDevices.length > 0) {
-            console.log(`Tentando reconectar ${reconnectedDevices.length} dispositivos conhecidos`);
+            console.log('Tentando reconectar ' + reconnectedDevices.length + ' dispositivos conhecidos');
           }
         }
       } catch (error) {
-        console.log('Erro na reconexão automática:', error);
+        console.log('Erro na reconexao automatica');
       }
-    }, 60000); // Check every minute
+    }, 60000);
   };
 
   const generateSyncCode = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substr(2, 4).toUpperCase();
-    const code = `${timestamp.slice(-4)}${random}`;
+    const code = timestamp.slice(-4) + random;
     setSyncCode(code);
   };
 
@@ -271,7 +263,7 @@ export default function SyncScreen() {
       await exportToXLSX(sessions);
       console.log('Excel exportado com sucesso');
     } catch (error) {
-      console.log('Erro na exportação Excel:', error);
+      console.log('Erro na exportacao Excel');
     }
   };
 
@@ -282,16 +274,14 @@ export default function SyncScreen() {
     return getExportSummaryUtil(sessions);
   };
 
-    const connectToDevice = async (device: AvailableDevice) => {
+  const connectToDevice = async (device: AvailableDevice) => {
     if (device.status === 'connecting' || !device || !device.id) return;
 
     try {
-      // Update device status to connecting
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { ...d, status: 'connecting', retryCount: 0 } : d)
       );
 
-      // Start sync operation tracking
       const syncOp: SyncOperation = {
         deviceId: device.id,
         status: 'syncing',
@@ -299,24 +289,21 @@ export default function SyncScreen() {
       };
       setSyncOperations(prev => [...prev, syncOp]);
 
-      // Simulate connection process with error handling
       const connectionSteps = [
         { step: 'Descobrindo dispositivo', delay: 500, progress: 20 },
-        { step: 'Estabelecendo conexão Bluetooth', delay: 800, progress: 50 },
+        { step: 'Estabelecendo conexao Bluetooth', delay: 800, progress: 50 },
         { step: 'Autenticando dispositivo', delay: 600, progress: 70 },
         { step: 'Sincronizando dados', delay: 1000, progress: 90 },
-        { step: 'Finalizando conexão', delay: 300, progress: 100 }
+        { step: 'Finalizando conexao', delay: 300, progress: 100 }
       ];
 
       for (const [index, { step, delay, progress }] of connectionSteps.entries()) {
         await new Promise(resolve => setTimeout(resolve, delay));
         
-        // Simulate potential connection failure
         if (Math.random() > 0.85 && index < 3) {
-          throw new Error(`Falha na etapa: ${step}`);
+          throw new Error('Falha na etapa: ' + step);
         }
 
-        // Update progress
         setSyncOperations(prev => 
           prev.map(op => 
             op.deviceId === device.id 
@@ -326,11 +313,10 @@ export default function SyncScreen() {
         );
       }
 
-      // Create connected device
       const newConnectedDevice: ConnectedDevice = {
         id: device.id,
         name: device.name,
-        deviceId: `DEV_${Date.now().toString(36).toUpperCase().slice(-4)}`,
+        deviceId: 'DEV_' + Date.now().toString(36).toUpperCase().slice(-4),
         status: 'autonomous',
         lastSync: new Date().toLocaleTimeString('pt-BR'),
         dataCount: Math.floor(Math.random() * 100) + 10,
@@ -341,7 +327,6 @@ export default function SyncScreen() {
       const updatedConnected = [...connectedDevices, newConnectedDevice];
       await saveConnectedDevices(updatedConnected);
 
-      // Save to known devices for auto-reconnection
       const knownDevices = await AsyncStorage.getItem('known_devices');
       const known = knownDevices ? JSON.parse(knownDevices) : [];
       known.push({
@@ -351,15 +336,13 @@ export default function SyncScreen() {
       });
       await AsyncStorage.setItem('known_devices', JSON.stringify(known));
 
-      // Remove from available
       setAvailableDevices(prev => prev.filter(d => d.id !== device.id));
       
-      console.log(`✅ Conectado a ${device.name} - Funcionando autonomamente`);
+      console.log('Conectado a ' + device.name + ' - Funcionando autonomamente');
 
     } catch (error) {
-      console.log(`❌ Erro na conexão com ${device.name}:`, error);
+      console.log('Erro na conexao com ' + device.name);
       
-      // Update device status to failed
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { 
           ...d, 
@@ -368,16 +351,14 @@ export default function SyncScreen() {
         } : d)
       );
 
-      // Update sync operation
       setSyncOperations(prev => 
         prev.map(op => 
           op.deviceId === device.id 
-            ? { ...op, status: 'failed', error: error.message }
+            ? { ...op, status: 'failed', error: String(error) }
             : op
         )
       );
 
-      // Auto-retry after delay if retry count is low
       const currentDevice = availableDevices.find(d => d.id === device.id);
       if ((currentDevice?.retryCount || 0) < 2) {
         setTimeout(() => {
@@ -387,7 +368,6 @@ export default function SyncScreen() {
         }, 3000);
       }
     } finally {
-      // Clean up sync operation after delay
       setTimeout(() => {
         setSyncOperations(prev => prev.filter(op => op.deviceId !== device.id));
       }, 5000);
@@ -403,7 +383,6 @@ export default function SyncScreen() {
       const updatedDevices = connectedDevices.filter(d => d.id !== deviceId);
       await saveConnectedDevices(updatedDevices);
       
-      // 70% chance device reappears in available list after disconnection
       if (Math.random() > 0.3) {
         setTimeout(() => {
           const reappearedDevice: AvailableDevice = {
@@ -418,18 +397,18 @@ export default function SyncScreen() {
             const exists = prev.find(d => d.id === deviceId);
             return exists ? prev : [...prev, reappearedDevice];
           });
-        }, Math.random() * 5000 + 2000); // 2-7 seconds delay
+        }, Math.random() * 5000 + 2000);
       }
       
-      console.log(`🔌 Dispositivo ${deviceToDisconnect.name} desconectado`);
+      console.log('Dispositivo ' + deviceToDisconnect.name + ' desconectado');
     } catch (error) {
-      console.log('Erro ao desconectar:', error);
+      console.log('Erro ao desconectar');
     }
   };
 
   const scanForDevices = async () => {
     if (!bluetoothEnabled) {
-      console.log('Bluetooth não está habilitado');
+      console.log('Bluetooth nao esta habilitado');
       return;
     }
 
@@ -437,13 +416,12 @@ export default function SyncScreen() {
     setLastScanTime(new Date().toLocaleString('pt-BR'));
     
     try {
-      // Simulate Bluetooth scanning process
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       const mockDevices: AvailableDevice[] = [
         { 
           id: 'bt_001', 
-          name: 'Contador João - Samsung A32', 
+          name: 'Contador Joao - Samsung A32', 
           type: 'bluetooth', 
           status: 'available',
           signal: Math.floor(Math.random() * 30) + 70
@@ -478,15 +456,14 @@ export default function SyncScreen() {
         }
       ];
       
-      // Remove devices already connected
       const connectedIds = connectedDevices.map(d => d.id);
       const filteredDevices = mockDevices.filter(d => !connectedIds.includes(d.id));
       
       setAvailableDevices(filteredDevices);
-      console.log(`📡 Encontrados ${filteredDevices.length} dispositivos disponíveis`);
+      console.log('Encontrados ' + filteredDevices.length + ' dispositivos disponiveis');
       
     } catch (error) {
-      console.log('Erro na busca de dispositivos:', error);
+      console.log('Erro na busca de dispositivos');
       setAvailableDevices([]);
     } finally {
       setLoading(false);
@@ -509,7 +486,7 @@ export default function SyncScreen() {
       if (Platform.OS === 'web') {
         try {
           await navigator.clipboard.writeText(shareContent);
-          console.log('📋 Dados copiados para área de transferência');
+          console.log('Dados copiados para area de transferencia');
         } catch (clipboardError) {
           try {
             const textArea = document.createElement('textarea');
@@ -522,9 +499,9 @@ export default function SyncScreen() {
             textArea.setSelectionRange(0, 99999);
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            console.log('📋 Dados copiados (método alternativo)');
+            console.log('Dados copiados (metodo alternativo)');
           } catch (fallbackError) {
-            console.log('❌ Erro ao copiar dados');
+            console.log('Erro ao copiar dados');
           }
         }
       } else {
@@ -535,7 +512,7 @@ export default function SyncScreen() {
         });
       }
     } catch (error) {
-      console.log('Erro ao compartilhar dados:', error);
+      console.log('Erro ao compartilhar dados');
     }
   };
 
@@ -548,7 +525,7 @@ export default function SyncScreen() {
       const importedData = JSON.parse(importCode);
       
       if (!importedData.contagens || !Array.isArray(importedData.contagens)) {
-        console.log('❌ Formato de dados inválido');
+        console.log('Formato de dados invalido');
         return;
       }
 
@@ -559,7 +536,7 @@ export default function SyncScreen() {
       const newSessions = importedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
       
       if (newSessions.length === 0) {
-        console.log('ℹ️ Nenhum dado novo para importar');
+        console.log('Nenhum dado novo para importar');
         setImportCode('');
         setShowImportModal(false);
         return;
@@ -572,9 +549,9 @@ export default function SyncScreen() {
       setImportCode('');
       setShowImportModal(false);
       
-      console.log(`✅ Importados ${newSessions.length} novos registros de ${importedData.deviceName || 'dispositivo desconhecido'}`);
+      console.log('Importados ' + newSessions.length + ' novos registros de ' + (importedData.deviceName || 'dispositivo desconhecido'));
     } catch (error) {
-      console.log('❌ Erro na importação:', error);
+      console.log('Erro na importacao');
     }
   };
 
@@ -593,7 +570,7 @@ export default function SyncScreen() {
       setExportData(exportString);
       setShowExportModal(true);
     } catch (error) {
-      console.log('Erro ao preparar dados para exportação:', error);
+      console.log('Erro ao preparar dados para exportacao');
     }
   };
 
@@ -601,7 +578,7 @@ export default function SyncScreen() {
     if (Platform.OS === 'web') {
       try {
         await navigator.clipboard.writeText(text);
-        console.log('📋 Copiado para área de transferência');
+        console.log('Copiado para area de transferencia');
       } catch (clipboardError) {
         try {
           const textArea = document.createElement('textarea');
@@ -614,9 +591,9 @@ export default function SyncScreen() {
           textArea.setSelectionRange(0, 99999);
           document.execCommand('copy');
           document.body.removeChild(textArea);
-          console.log('📋 Copiado (método alternativo)');
+          console.log('Copiado (metodo alternativo)');
         } catch (fallbackError) {
-          console.log('❌ Erro ao copiar');
+          console.log('Erro ao copiar');
         }
       }
     }
@@ -655,7 +632,7 @@ export default function SyncScreen() {
           <MaterialIcons name="bluetooth-searching" size={48} color="#2563EB" />
           <Text style={styles.loadingText}>Buscando dispositivos...</Text>
           {lastScanTime && (
-            <Text style={styles.lastScanText}>Última busca: {lastScanTime}</Text>
+            <Text style={styles.lastScanText}>Ultima busca: {lastScanTime}</Text>
           )}
         </View>
       </SafeAreaView>
@@ -666,7 +643,6 @@ export default function SyncScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         
-        {/* Device Info Section */}
         <View style={styles.deviceSection}>
           <Text style={styles.sectionTitle}>Meu Dispositivo</Text>
           
@@ -717,7 +693,6 @@ export default function SyncScreen() {
           </View>
         </View>
 
-        {/* Connected Devices Section */}
         {connectedDevices.length > 0 && (
           <View style={styles.connectedSection}>
             <Text style={styles.sectionTitle}>Dispositivos Conectados ({connectedDevices.length})</Text>
@@ -733,7 +708,7 @@ export default function SyncScreen() {
                   <View style={styles.connectedDeviceInfo}>
                     <Text style={styles.connectedDeviceName}>{device.name}</Text>
                     <Text style={styles.connectedDeviceId}>ID: {device.deviceId}</Text>
-                    <Text style={styles.lastSync}>Última sync: {device.lastSync}</Text>
+                    <Text style={styles.lastSync}>Ultima sync: {device.lastSync}</Text>
                     {device.signalStrength && (
                       <Text style={styles.signalStrength}>Sinal: {device.signalStrength}%</Text>
                     )}
@@ -763,28 +738,27 @@ export default function SyncScreen() {
           </View>
         )}
 
-        {/* Excel Export Section */}
         <View style={styles.excelSection}>
           <Text style={styles.sectionTitle}>Exportar Planilha Excel</Text>
           
           <TouchableOpacity style={styles.excelExportButton} onPress={exportXLSXData}>
             <MaterialIcons name="table-chart" size={32} color="white" />
             <Text style={styles.excelExportText}>Exportar XLSX</Text>
-            <Text style={styles.excelExportSubtext}>Planilha Excel • WhatsApp • Email</Text>
+            <Text style={styles.excelExportSubtext}>Planilha Excel - WhatsApp - Email</Text>
           </TouchableOpacity>
           
           <View style={styles.exportPreview}>
             <Text style={styles.previewTitle}>Colunas da Planilha:</Text>
             <Text style={styles.previewColumns}>
-              Ordem de Contagem • Data • Ambiente • Nome do Contador • Hora Inicial • Hora Final • 
-              Total Minutos • Registro Contagem • Pirarucu • Bodeco • Total
+              Ordem de Contagem - Data - Ambiente - Nome do Contador - Hora Inicial - Hora Final - 
+              Total Minutos - Registro Contagem - Pirarucu - Bodeco - Total
             </Text>
           </View>
           
           <View style={styles.statsPreview}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{stats.contagens}</Text>
-              <Text style={styles.statLabel}>Sessões</Text>
+              <Text style={styles.statLabel}>Sessoes</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{getCurrentExportSummary().totalRegistros}</Text>
@@ -801,9 +775,8 @@ export default function SyncScreen() {
           </View>
         </View>
 
-        {/* Sync Code */}
         <View style={styles.syncCodeSection}>
-          <Text style={styles.sectionTitle}>Código de Sincronização</Text>
+          <Text style={styles.sectionTitle}>Codigo de Sincronizacao</Text>
           <View style={styles.syncCodeContainer}>
             <Text style={styles.syncCodeText}>{syncCode}</Text>
             <TouchableOpacity style={styles.refreshButton} onPress={generateSyncCode}>
@@ -811,13 +784,12 @@ export default function SyncScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.syncCodeDescription}>
-            Compartilhe este código com outros contadores para sincronização
+            Compartilhe este codigo com outros contadores para sincronizacao
           </Text>
         </View>
 
-                {/* Quick Actions */}
         <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Sincronização Rápida</Text>
+          <Text style={styles.sectionTitle}>Sincronizacao Rapida</Text>
           
           <TouchableOpacity style={styles.actionButton} onPress={shareData}>
             <MaterialIcons name="share" size={24} color="white" />
@@ -831,7 +803,7 @@ export default function SyncScreen() {
 
           <TouchableOpacity style={[styles.actionButton, styles.exportButton]} onPress={prepareExportData}>
             <MaterialIcons name="code" size={24} color="white" />
-            <Text style={styles.actionButtonText}>Gerar Código de Exportação</Text>
+            <Text style={styles.actionButtonText}>Gerar Codigo de Exportacao</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -844,9 +816,9 @@ export default function SyncScreen() {
                 setSessions([]);
                 setConnectedDevices([]);
                 setAvailableDevices([]);
-                console.log('✅ Todos os dados de sincronização foram apagados');
+                console.log('Todos os dados de sincronizacao foram apagados');
               } catch (error) {
-                console.log('❌ Erro ao apagar dados:', error);
+                console.log('Erro ao apagar dados');
               }
             }}
           >
@@ -855,10 +827,9 @@ export default function SyncScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Bluetooth Section */}
         <View style={styles.bluetoothSection}>
           <View style={styles.bluetoothHeader}>
-            <Text style={styles.sectionTitle}>Sincronização Bluetooth</Text>
+            <Text style={styles.sectionTitle}>Sincronizacao Bluetooth</Text>
             <View style={styles.bluetoothControls}>
               <TouchableOpacity 
                 style={[styles.bluetoothToggle, bluetoothEnabled ? styles.bluetoothEnabled : styles.bluetoothDisabled]}
@@ -896,10 +867,10 @@ export default function SyncScreen() {
               <MaterialIcons name="bluetooth-searching" size={48} color="#9CA3AF" />
               <Text style={styles.emptyDevicesText}>Nenhum dispositivo encontrado</Text>
               <Text style={styles.emptyDevicesSubtext}>
-                Toque em "Buscar" para procurar dispositivos próximos
+                Toque em Buscar para procurar dispositivos proximos
               </Text>
               {lastScanTime && (
-                <Text style={styles.lastScanTime}>Última busca: {lastScanTime}</Text>
+                <Text style={styles.lastScanTime}>Ultima busca: {lastScanTime}</Text>
               )}
             </View>
           ) : (
@@ -925,24 +896,24 @@ export default function SyncScreen() {
                     <View style={styles.deviceDetails}>
                       <Text style={styles.deviceName}>{device.name}</Text>
                       <Text style={[
-                        styles.deviceStatus,
+                        styles.deviceStatusText,
                         device.status === 'failed' && styles.failedStatus
                       ]}>
-                        {device.status === 'available' && 'Disponível'}
+                        {device.status === 'available' && 'Disponivel'}
                         {device.status === 'connecting' && 'Conectando...'}
-                        {device.status === 'failed' && `Falha na conexão (${device.retryCount || 0}/3)`}
+                        {device.status === 'failed' && 'Falha na conexao (' + (device.retryCount || 0) + '/3)'}
                       </Text>
                       {device.signal && (
                         <Text style={styles.signalStrength}>
-                          Sinal: {device.signal}% {device.signal > 70 ? '📶' : device.signal > 40 ? '📶' : '📶'}
+                          Sinal: {device.signal}%
                         </Text>
                       )}
                       {syncOp && (
                         <View style={styles.syncProgress}>
                           <Text style={styles.syncProgressText}>
-                            {syncOp.status === 'syncing' && `Progresso: ${syncOp.progress}%`}
-                            {syncOp.status === 'completed' && '✅ Conectado'}
-                            {syncOp.status === 'failed' && `❌ ${syncOp.error}`}
+                            {syncOp.status === 'syncing' && 'Progresso: ' + syncOp.progress + '%'}
+                            {syncOp.status === 'completed' && 'Conectado'}
+                            {syncOp.status === 'failed' && 'Erro: ' + syncOp.error}
                           </Text>
                         </View>
                       )}
@@ -964,19 +935,18 @@ export default function SyncScreen() {
         </View>
       </ScrollView>
 
-      {/* Export Modal */}
       <Modal visible={showExportModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Código de Exportação</Text>
+              <Text style={styles.modalTitle}>Codigo de Exportacao</Text>
               <TouchableOpacity onPress={() => setShowExportModal(false)}>
                 <MaterialIcons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
             
             <Text style={styles.modalDescription}>
-              Compartilhe este código com outros dispositivos para importar seus dados:
+              Compartilhe este codigo com outros dispositivos para importar seus dados:
             </Text>
             
             <ScrollView style={styles.codeContainer}>
@@ -996,7 +966,6 @@ export default function SyncScreen() {
         </View>
       </Modal>
 
-      {/* Import Modal */}
       <Modal visible={showImportModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1008,14 +977,14 @@ export default function SyncScreen() {
             </View>
             
             <Text style={styles.modalDescription}>
-              Cole aqui o código de exportação recebido de outro dispositivo:
+              Cole aqui o codigo de exportacao recebido de outro dispositivo:
             </Text>
             
             <TextInput
               style={styles.importInput}
               value={importCode}
               onChangeText={setImportCode}
-              placeholder="Cole o código aqui..."
+              placeholder="Cole o codigo aqui..."
               multiline
               numberOfLines={4}
             />
@@ -1446,6 +1415,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  deviceStatusText: {
+    fontSize: 12,
+    color: '#059669',
+    marginTop: 2,
   },
   signalStrength: {
     fontSize: 12,

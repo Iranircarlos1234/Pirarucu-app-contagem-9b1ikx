@@ -154,8 +154,8 @@ export const generateXLSXContent = (sessions: CountSession[]): string => {
   let globalOrder = 1;
   
     // Cabeçalho do relatório
-  content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
-  content += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
+    content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
+  content += 'Data de Exportacao: ' + new Date().toLocaleDateString('pt-BR') + '\n\n';
   
   // Resumo geral por ambiente
   content += 'RESUMO GERAL POR AMBIENTE\n';
@@ -168,9 +168,8 @@ export const generateXLSXContent = (sessions: CountSession[]): string => {
   content += '\n';
   
   // Dados detalhados por ambiente
-  environmentData.forEach((env, envIndex) => {
-    content += `\n=== AMBIENTE: ${env.ambiente} ===\n`;
-    content += `Resumo: ${env.totalBodecos} bodecos, ${env.totalPirarucus} pirarucus, ${env.numeroContadores} contadores\n\n`;
+  environmentData.forEach((env, envIndex) => {    content += '\n=== AMBIENTE: ' + env.ambiente + ' ===\n';
+    content += 'Resumo: ' + env.totalBodecos + ' bodecos, ' + env.totalPirarucus + ' pirarucus, ' + env.numeroContadores + ' contadores\n\n';
     
     // Cabeçalhos das colunas
     content += 'Ordem de Contagem;Data;Ambiente;Nome do Contador;Hora Inicial;Hora Final;Total Minutos;Registro Contagem;Pirarucu;Bodeco;Total\n';
@@ -196,8 +195,7 @@ export const generateXLSXContent = (sessions: CountSession[]): string => {
     });
     
     // Totais do ambiente
-    content += '\n';
-    content += `TOTAIS ${env.ambiente};;;;;;;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral}\n`;
+    content += '\n';    content += 'TOTAIS ' + env.ambiente + ';;;;;;;;;' + env.totalBodecos + ';' + env.totalPirarucus + ';' + env.totalGeral + '\n';
     content += '\n';
   });
   
@@ -206,12 +204,11 @@ export const generateXLSXContent = (sessions: CountSession[]): string => {
   const totalGeralPirarucus = environmentData.reduce((sum, env) => sum + env.totalPirarucus, 0);
   const totalGeralContadores = environmentData.reduce((sum, env) => sum + env.numeroContadores, 0);
   
-  content += '\n=== RESUMO FINAL ===\n';
-  content += `Total de Ambientes: ${environmentData.length}\n`;
-  content += `Total de Contadores: ${totalGeralContadores}\n`;
-  content += `Total de Bodecos: ${totalGeralBodecos}\n`;
-  content += `Total de Pirarucus: ${totalGeralPirarucus}\n`;
-  content += `Total Geral: ${totalGeralBodecos + totalGeralPirarucus}\n`;
+  content += '\n=== RESUMO FINAL ===\n';  content += 'Total de Ambientes: ' + environmentData.length + '\n';
+  content += 'Total de Contadores: ' + totalGeralContadores + '\n';
+  content += 'Total de Bodecos: ' + totalGeralBodecos + '\n';
+  content += 'Total de Pirarucus: ' + totalGeralPirarucus + '\n';
+  content += 'Total Geral: ' + (totalGeralBodecos + totalGeralPirarucus) + '\n';
   
   return content;
 };
@@ -222,8 +219,7 @@ export const exportToXLSX = async (sessions: CountSession[]): Promise<void> => {
       throw new Error('Nenhum dado para exportar');
     }
 
-    const xlsxContent = generateXLSXContent(sessions);
-    const fileName = `Pirarucu_Contagem_${new Date().toISOString().split('T')[0]}.csv`;
+    const xlsxContent = generateXLSXContent(sessions);    const fileName = 'Pirarucu_Contagem_' + new Date().toISOString().split('T')[0] + '.csv';
     
     if (Platform.OS === 'web') {
       // Web: Download automático

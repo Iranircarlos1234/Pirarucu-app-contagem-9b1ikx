@@ -64,10 +64,11 @@ export default function CountingScreen() {
   const [availableDevices, setAvailableDevices] = useState<BluetoothDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('Pronto');
-  const [receivedDataPreview, setReceivedDataPreview] = useState<any>(null);
+    const [receivedDataPreview, setReceivedDataPreview] = useState<any>(null);
+  const [showPrincipalConfirm, setShowPrincipalConfirm] = useState(false);
   
   // Principal/Emissor system
-    const [isPrincipal, setIsPrincipal] = useState(false);
+  const [isPrincipal, setIsPrincipal] = useState(false);
   const [connectedEmissors, setConnectedEmissors] = useState<BluetoothDevice[]>([]);
   const [autoCollecting, setAutoCollecting] = useState(false);
   const [showPrincipalConfirm, setShowPrincipalConfirm] = useState(false);
@@ -125,17 +126,16 @@ export default function CountingScreen() {
     const random = Math.random().toString(36).substr(2, 4).toUpperCase();
     const code = `${timestamp.slice(-4)}${random}`;
     setEmissorCode(code);
-  };
-  const confirmBecomePrincipal = () => {
+  };  const confirmBecomePrincipal = () => {
     if (isActive) {
-      console.log('⚠️ Não é possível se tornar principal durante contagem ativa');
+      console.log('Não é possível se tornar principal durante contagem ativa');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
     setShowPrincipalConfirm(true);
   };
 
-    const becomePrincipal = async () => {
+  const becomePrincipal = async () => {
     setShowPrincipalConfirm(false);
 
     if (isActive) {
@@ -159,8 +159,7 @@ export default function CountingScreen() {
       setAvailableDevices(prev => 
         prev.filter(device => device.status !== 'connected')
       );
-      
-      console.log(`🎯 Dispositivo principal ativo com ${emissors.length} emissores`);
+            console.log(`Dispositivo principal ativo com ${emissors.length} emissores`);
       
       // Start auto-collection
       if (emissors.length > 0) {
@@ -557,7 +556,6 @@ export default function CountingScreen() {
       console.log('Erro ao salvar:', error);
     }
   };
-
   const resetSession = () => {
     setIsActive(false);
     setTimeLeft(1200);
