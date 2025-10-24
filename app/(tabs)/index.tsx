@@ -45,7 +45,7 @@ export default function CountingScreen() {
   const [contador, setContador] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [currentCount, setCurrentCount] = useState(1);
-  const [timeLeft, setTimeLeft] = useState(1200); // 20 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(1200);
   const [horaInicio, setHoraInicio] = useState('');
   const [horaFinal, setHoraFinal] = useState('');
   const [contagens, setContagens] = useState<Array<{
@@ -57,18 +57,16 @@ export default function CountingScreen() {
   const [currentBodeco, setCurrentBodeco] = useState(0);
   const [currentPirarucu, setCurrentPirarucu] = useState(0);
   
-  // Sync fields - Enhanced
   const [receptorData, setReceptorData] = useState('');
   const [emissorCode, setEmissorCode] = useState('');
   const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
   const [availableDevices, setAvailableDevices] = useState<BluetoothDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('Pronto');
-    const [receivedDataPreview, setReceivedDataPreview] = useState<any>(null);
+  const [receivedDataPreview, setReceivedDataPreview] = useState<any>(null);
   const [showPrincipalConfirm, setShowPrincipalConfirm] = useState(false);
   
-  // Principal/Emissor system
-    const [isPrincipal, setIsPrincipal] = useState(false);
+  const [isPrincipal, setIsPrincipal] = useState(false);
   const [connectedEmissors, setConnectedEmissors] = useState<BluetoothDevice[]>([]);
   const [autoCollecting, setAutoCollecting] = useState(false);
 
@@ -95,7 +93,6 @@ export default function CountingScreen() {
     };
   }, [isActive, timeLeft]);
 
-  // Auto-collect data when principal
   useEffect(() => {
     if (isPrincipal && connectedEmissors.length > 0) {
       startAutoCollection();
@@ -107,27 +104,29 @@ export default function CountingScreen() {
       const sessions = await AsyncStorage.getItem('pirarucu_sessions');
       if (sessions) {
         const parsedSessions = JSON.parse(sessions);
-        setSyncStatus(`${parsedSessions.length} contagens disponíveis`);
+        setSyncStatus(String(parsedSessions.length) + ' contagens disponiveis');
       }
     } catch (error) {
-      console.log('Erro ao carregar status de sync:', error);
+      console.log('Erro ao carregar status de sync');
     }
   };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
   };
 
   const generateEmissorCode = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substr(2, 4).toUpperCase();
-    const code = `${timestamp.slice(-4)}${random}`;
+    const code = timestamp.slice(-4) + random;
     setEmissorCode(code);
-  };  const confirmBecomePrincipal = () => {
+  };
+
+  const confirmBecomePrincipal = () => {
     if (isActive) {
-      console.log('Não é possível se tornar principal durante contagem ativa');
+      console.log('Nao e possivel se tornar principal durante contagem ativa');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
@@ -138,37 +137,35 @@ export default function CountingScreen() {
     setShowPrincipalConfirm(false);
 
     if (isActive) {
-      console.log('⚠️ Não é possível se tornar principal durante contagem ativa');
+      console.log('Nao e possivel se tornar principal durante contagem ativa');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
 
     try {
       setIsPrincipal(true);
-      setSyncStatus('🎯 RECEPTOR PRINCIPAL ATIVO');
+      setSyncStatus('RECEPTOR PRINCIPAL ATIVO');
       
-      // Transform connected devices into emissors
       const emissors = availableDevices
         .filter(device => device.status === 'connected')
         .map(device => ({ ...device, role: 'emissor' as const }));
       
       setConnectedEmissors(emissors);
       
-      // Remove from available devices
       setAvailableDevices(prev => 
         prev.filter(device => device.status !== 'connected')
       );
-            console.log(`Dispositivo principal ativo com ${emissors.length} emissores`);
       
-      // Start auto-collection
+      console.log('Dispositivo principal ativo com ' + String(emissors.length) + ' emissores');
+      
       if (emissors.length > 0) {
         setAutoCollecting(true);
-        setSyncStatus(`🔄 Coletando de ${emissors.length} emissores`);
+        setSyncStatus('Coletando de ' + String(emissors.length) + ' emissores');
       }
       
     } catch (error) {
-      console.log('❌ Erro ao se tornar principal:', error);
-      setSyncStatus('❌ Erro ao ativar principal');
+      console.log('Erro ao se tornar principal');
+      setSyncStatus('Erro ao ativar principal');
     }
   };
 
@@ -178,19 +175,17 @@ export default function CountingScreen() {
     try {
       setAutoCollecting(true);
       
-      // Simulate auto-collection from emissors
       const collectionPromises = connectedEmissors.map(async (emissor, index) => {
         await new Promise(resolve => setTimeout(resolve, (index + 1) * 1000));
         
-        // Simulate receiving data from emissor
         const mockData = {
           deviceName: emissor.name,
           contagens: [
             {
-              id: `auto_${Date.now()}_${index}`,
-              ambiente: ambiente || `Ambiente ${index + 1}`,
-              setor: `Setor ${emissor.name}`,
-              contador: emissor.name.split(' ')[1] || `Contador ${index + 1}`,
+              id: 'auto_' + String(Date.now()) + '_' + String(index),
+              ambiente: ambiente || 'Ambiente ' + String(index + 1),
+              setor: 'Setor ' + emissor.name,
+              contador: emissor.name.split(' ')[1] || 'Contador ' + String(index + 1),
               horaInicio: new Date().toLocaleTimeString('pt-BR'),
               horaFinal: new Date().toLocaleTimeString('pt-BR'),
               contagens: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, i) => ({
@@ -206,22 +201,21 @@ export default function CountingScreen() {
           timestamp: new Date().toISOString()
         };
 
-        // Calculate totals
         mockData.contagens[0].totalBodeco = mockData.contagens[0].contagens.reduce((sum, c) => sum + c.bodeco, 0);
         mockData.contagens[0].totalPirarucu = mockData.contagens[0].contagens.reduce((sum, c) => sum + c.pirarucu, 0);
 
         await processReceivedData(mockData, emissor.name);
         
-        console.log(`📥 Dados coletados de ${emissor.name}`);
+        console.log('Dados coletados de ' + emissor.name);
       });
 
       await Promise.all(collectionPromises);
       
-      setSyncStatus(`✅ ${connectedEmissors.length} emissores sincronizados`);
+      setSyncStatus('Sucesso: ' + String(connectedEmissors.length) + ' emissores sincronizados');
       
     } catch (error) {
-      console.log('❌ Erro na coleta automática:', error);
-      setSyncStatus('❌ Erro na coleta');
+      console.log('Erro na coleta automatica');
+      setSyncStatus('Erro na coleta');
     } finally {
       setAutoCollecting(false);
     }
@@ -229,53 +223,48 @@ export default function CountingScreen() {
 
   const processReceivedData = async (receivedData: any, sourceName: string) => {
     try {
-      // Load existing sessions
       const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
       const currentSessions = existingSessions ? JSON.parse(existingSessions) : [];
       
-      // Filter new data
       const existingIds = new Set(currentSessions.map((s: CountSession) => s.id));
       const newSessions = receivedData.contagens.filter((s: CountSession) => !existingIds.has(s.id));
       
       if (newSessions.length > 0) {
         const mergedSessions = [...currentSessions, ...newSessions];
         await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(mergedSessions));
-        console.log(`✅ ${newSessions.length} registros de ${sourceName} integrados`);
+        console.log('Sucesso: ' + String(newSessions.length) + ' registros de ' + sourceName + ' integrados');
       }
       
     } catch (error) {
-      console.log(`❌ Erro ao processar dados de ${sourceName}:`, error);
+      console.log('Erro ao processar dados de ' + sourceName);
     }
   };
 
   const receiveData = async () => {
     if (!receptorData.trim()) {
-      console.log('❌ Nenhum código inserido');
-      setSyncStatus('❌ Nenhum código inserido');
+      console.log('Nenhum codigo inserido');
+      setSyncStatus('Nenhum codigo inserido');
       return;
     }
 
     if (isActive) {
-      console.log('⚠️ Pare a contagem antes de receber dados');
+      console.log('Pare a contagem antes de receber dados');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
 
-    // Transform into principal when receiving data
     await becomePrincipal();
 
     try {
       setSyncStatus('Processando dados...');
       const receivedData = JSON.parse(receptorData);
       
-      // Validate data structure
       if (!receivedData.contagens || !Array.isArray(receivedData.contagens)) {
-        console.log('❌ Formato de dados inválido');
-        setSyncStatus('Erro: Formato inválido');
+        console.log('Formato de dados invalido');
+        setSyncStatus('Erro: Formato invalido');
         return;
       }
 
-      // Preview received data
       setReceivedDataPreview({
         deviceName: receivedData.deviceName || 'Dispositivo desconhecido',
         totalContagens: receivedData.contagens.length,
@@ -285,12 +274,12 @@ export default function CountingScreen() {
 
       await processReceivedData(receivedData, receivedData.deviceName);
       
-      setSyncStatus(`✅ Dados integrados como PRINCIPAL`);
+      setSyncStatus('Dados integrados como PRINCIPAL');
       setReceptorData('');
       
     } catch (error) {
-      console.log('❌ Erro na importação:', error);
-      setSyncStatus('❌ Erro ao processar dados');
+      console.log('Erro na importacao');
+      setSyncStatus('Erro ao processar dados');
     }
   };
 
@@ -302,7 +291,7 @@ export default function CountingScreen() {
       const sessionsData = sessionsJson ? JSON.parse(sessionsJson) : [];
       
       if (sessionsData.length === 0) {
-        console.log('ℹ️ Nenhum dado para enviar');
+        console.log('Nenhum dado para enviar');
         setSyncStatus('Nenhum dado para enviar');
         return;
       }
@@ -311,8 +300,8 @@ export default function CountingScreen() {
         contagens: sessionsData,
         timestamp: new Date().toISOString(),
         version: '1.0',
-        deviceName: `Contador ${emissorCode}`,
-        ambiente: ambiente || 'Ambiente não informado',
+        deviceName: 'Contador ' + emissorCode,
+        ambiente: ambiente || 'Ambiente nao informado',
         totalRegistros: sessionsData.length,
         role: isPrincipal ? 'principal' : 'emissor'
       };
@@ -322,8 +311,8 @@ export default function CountingScreen() {
       if (Platform.OS === 'web') {
         try {
           await navigator.clipboard.writeText(dataString);
-          console.log('📋 Dados copiados para área de transferência');
-          setSyncStatus('📋 Dados copiados com sucesso');
+          console.log('Dados copiados para area de transferencia');
+          setSyncStatus('Dados copiados com sucesso');
         } catch (clipboardError) {
           try {
             const textArea = document.createElement('textarea');
@@ -336,40 +325,40 @@ export default function CountingScreen() {
             textArea.setSelectionRange(0, 99999);
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            console.log('📋 Dados copiados (método alternativo)');
-            setSyncStatus('📋 Dados copiados com sucesso');
+            console.log('Dados copiados (metodo alternativo)');
+            setSyncStatus('Dados copiados com sucesso');
           } catch (fallbackError) {
-            console.log('❌ Erro ao copiar dados');
-            setSyncStatus('❌ Erro ao copiar');
+            console.log('Erro ao copiar dados');
+            setSyncStatus('Erro ao copiar');
           }
         }
       } else {
-        console.log(`Código: ${emissorCode}\n${sessionsData.length} contagens prontas para envio`);
-        setSyncStatus(`📤 ${sessionsData.length} contagens prontas`);
+        console.log('Codigo: ' + emissorCode + ' - ' + String(sessionsData.length) + ' contagens prontas para envio');
+        setSyncStatus(String(sessionsData.length) + ' contagens prontas');
       }
       
       generateEmissorCode();
     } catch (error) {
-      console.log('❌ Erro ao preparar dados:', error);
-      setSyncStatus('❌ Erro na preparação');
+      console.log('Erro ao preparar dados');
+      setSyncStatus('Erro na preparacao');
     }
   };
 
   const scanBluetoothDevices = async () => {
     if (!bluetoothEnabled) {
-      console.log('❌ Bluetooth desabilitado');
+      console.log('Bluetooth desabilitado');
       setSyncStatus('Bluetooth desabilitado');
       return;
     }
 
     if (isActive) {
-      console.log('⚠️ Não é possível sincronizar durante contagem ativa');
+      console.log('Nao e possivel sincronizar durante contagem ativa');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
 
     setIsScanning(true);
-    setSyncStatus('🔍 Buscando dispositivos...');
+    setSyncStatus('Buscando dispositivos...');
 
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -377,7 +366,7 @@ export default function CountingScreen() {
       const mockDevices: BluetoothDevice[] = [
         { 
           id: 'bt_001', 
-          name: 'Contador João - Samsung', 
+          name: 'Contador Joao - Samsung', 
           signal: Math.floor(Math.random() * 30) + 70,
           status: 'available'
         },
@@ -396,12 +385,12 @@ export default function CountingScreen() {
       ];
 
       setAvailableDevices(mockDevices);
-      setSyncStatus(`📱 ${mockDevices.length} dispositivos encontrados`);
-      console.log(`📡 Encontrados ${mockDevices.length} dispositivos Bluetooth`);
+      setSyncStatus(String(mockDevices.length) + ' dispositivos encontrados');
+      console.log('Encontrados ' + String(mockDevices.length) + ' dispositivos Bluetooth');
       
     } catch (error) {
-      console.log('❌ Erro na busca Bluetooth:', error);
-      setSyncStatus('❌ Erro na busca');
+      console.log('Erro na busca Bluetooth');
+      setSyncStatus('Erro na busca');
       setAvailableDevices([]);
     } finally {
       setIsScanning(false);
@@ -410,31 +399,31 @@ export default function CountingScreen() {
 
   const connectBluetoothDevice = async (device: BluetoothDevice) => {
     if (isActive) {
-      console.log('⚠️ Pare a contagem antes de conectar');
+      console.log('Pare a contagem antes de conectar');
       setSyncStatus('Pare a contagem primeiro');
       return;
     }
 
     try {
-      setSyncStatus(`🔗 Conectando a ${device.name}...`);
+      setSyncStatus('Conectando a ' + device.name + '...');
       
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { ...d, status: 'connecting' } : d)
       );
 
       const connectionSteps = [
-        'Estabelecendo conexão...',
+        'Estabelecendo conexao...',
         'Autenticando dispositivo...',
         'Sincronizando dados...',
         'Finalizando...'
       ];
 
       for (const step of connectionSteps) {
-        setSyncStatus(`🔗 ${step}`);
+        setSyncStatus(step);
         await new Promise(resolve => setTimeout(resolve, 800));
         
         if (Math.random() > 0.85) {
-          throw new Error(`Falha na etapa: ${step}`);
+          throw new Error('Falha na etapa: ' + step);
         }
       }
 
@@ -442,12 +431,12 @@ export default function CountingScreen() {
         prev.map(d => d.id === device.id ? { ...d, status: 'connected' } : d)
       );
 
-      setSyncStatus(`✅ Conectado a ${device.name}`);
-      console.log(`✅ Sincronização bem-sucedida com ${device.name}`);
+      setSyncStatus('Conectado a ' + device.name);
+      console.log('Sincronizacao bem-sucedida com ' + device.name);
 
     } catch (error) {
-      console.log(`❌ Erro na conexão com ${device.name}:`, error);
-      setSyncStatus(`❌ Falha: ${device.name}`);
+      console.log('Erro na conexao com ' + device.name);
+      setSyncStatus('Falha: ' + device.name);
       
       setAvailableDevices(prev => 
         prev.map(d => d.id === device.id ? { ...d, status: 'available' } : d)
@@ -457,7 +446,7 @@ export default function CountingScreen() {
 
   const startCounting = () => {
     if (!ambiente || !setor || !contador) {
-      console.log('❌ Preencha todos os campos obrigatórios');
+      console.log('Preencha todos os campos obrigatorios');
       return;
     }
 
@@ -494,7 +483,7 @@ export default function CountingScreen() {
     if (contagens.length === 0) {
       setIsActive(false);
       setTimeLeft(1200);
-      setSyncStatus('Pronto para sincronização');
+      setSyncStatus('Pronto para sincronizacao');
       return;
     }
 
@@ -520,7 +509,7 @@ export default function CountingScreen() {
     setIsActive(false);
     setTimeLeft(1200);
     setCurrentCount(currentCount + 1);
-    setSyncStatus(`✅ Contagem finalizada - ${contagens.length} registros`);
+    setSyncStatus('Contagem finalizada - ' + String(contagens.length) + ' registros');
     
     generateEmissorCode();
   };
@@ -549,12 +538,13 @@ export default function CountingScreen() {
         sessions.push(session);
         await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(sessions));
         
-        setSyncStatus(`${sessions.length} contagens disponíveis`);
+        setSyncStatus(String(sessions.length) + ' contagens disponiveis');
       }
     } catch (error) {
-      console.log('Erro ao salvar:', error);
+      console.log('Erro ao salvar');
     }
   };
+
   const resetSession = () => {
     setIsActive(false);
     setTimeLeft(1200);
@@ -564,7 +554,7 @@ export default function CountingScreen() {
     setCurrentPirarucu(0);
     setHoraInicio('');
     setHoraFinal('');
-    setSyncStatus('Pronto para sincronização');
+    setSyncStatus('Pronto para sincronizacao');
   };
 
   const totalBodeco = contagens.reduce((sum, c) => sum + c.bodeco, 0);
@@ -573,9 +563,8 @@ export default function CountingScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Info Fields */}
         <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Informações da Contagem</Text>
+          <Text style={styles.sectionTitle}>Informacoes da Contagem</Text>
           
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nome do Ambiente (lago contado)</Text>
@@ -594,7 +583,7 @@ export default function CountingScreen() {
               style={styles.input}
               value={setor}
               onChangeText={setSetor}
-              placeholder="Ex: Setor Norte - Comunidade São José"
+              placeholder="Ex: Setor Norte - Comunidade Sao Jose"
               editable={!isActive}
             />
           </View>
@@ -611,10 +600,9 @@ export default function CountingScreen() {
           </View>
         </View>
 
-        {/* Enhanced Sync Section */}
         <View style={styles.syncSection}>
           <View style={styles.syncHeaderRow}>
-            <Text style={styles.sectionTitle}>Sincronização de Dados</Text>
+            <Text style={styles.sectionTitle}>Sincronizacao de Dados</Text>
             {isPrincipal && (
               <View style={styles.principalBadge}>
                 <MaterialIcons name="stars" size={16} color="white" />
@@ -623,7 +611,6 @@ export default function CountingScreen() {
             )}
           </View>
           
-          {/* Sync Status */}
           <View style={[
             styles.syncStatusContainer,
             isPrincipal && styles.principalStatusContainer
@@ -651,7 +638,6 @@ export default function CountingScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Data Exchange Row */}
           <View style={styles.syncRow}>
             <View style={styles.syncItem}>
               <Text style={styles.syncLabel}>Receptor</Text>
@@ -659,28 +645,28 @@ export default function CountingScreen() {
                 style={[styles.syncInput, isActive && styles.disabledInput]}
                 value={receptorData}
                 onChangeText={setReceptorData}
-                placeholder="Cole o código aqui..."
+                placeholder="Cole o codigo aqui..."
                 editable={!isActive}
                 multiline
                 numberOfLines={3}
               />
               
-              {/* Received Data Preview */}
               {receivedDataPreview && (
                 <View style={styles.previewContainer}>
                   <Text style={styles.previewTitle}>Dados Recebidos:</Text>
                   <Text style={styles.previewText}>
-                    📱 {receivedDataPreview.deviceName}
+                    {receivedDataPreview.deviceName || 'Dispositivo'}
                   </Text>
                   <Text style={styles.previewText}>
-                    📊 {receivedDataPreview.totalContagens} contagens
+                    {String(receivedDataPreview.totalContagens || 0) + ' contagens'}
                   </Text>
                   <Text style={styles.previewText}>
-                    🌊 {receivedDataPreview.ambientes?.join(', ') || 'Ambientes não especificados'}
+                    {receivedDataPreview.ambientes?.join(', ') || 'Ambientes nao especificados'}
                   </Text>
                 </View>
               )}
-                            {!isPrincipal ? (
+              
+              {!isPrincipal ? (
                 <TouchableOpacity 
                   style={[
                     styles.syncButton, 
@@ -711,8 +697,8 @@ export default function CountingScreen() {
                       setIsPrincipal(false);
                       setConnectedEmissors([]);
                       setAutoCollecting(false);
-                      setSyncStatus('Pronto para sincronização');
-                      console.log('🔙 Voltou ao modo normal');
+                      setSyncStatus('Pronto para sincronizacao');
+                      console.log('Voltou ao modo normal');
                     }}
                   >
                     <MaterialIcons name="arrow-back" size={18} color="white" />
@@ -727,11 +713,11 @@ export default function CountingScreen() {
               <View style={styles.emissorContainer}>
                 <View style={styles.emissorInfo}>
                   <Text style={styles.emissorCode}>{emissorCode}</Text>
-                  <Text style={styles.emissorDetails}>
-                    {ambiente ? `📍 ${ambiente}` : '📍 Ambiente não definido'}
+                  <Text style={styles.emissorSubtext}>
+                    {ambiente || 'Ambiente nao definido'}
                   </Text>
                   {isPrincipal && (
-                    <Text style={styles.emissorRole}>🎯 Modo Principal</Text>
+                    <Text style={styles.emissorRole}>Modo Principal</Text>
                   )}
                 </View>
                 <TouchableOpacity style={styles.refreshEmissor} onPress={generateEmissorCode}>
@@ -754,11 +740,10 @@ export default function CountingScreen() {
             </View>
           </View>
 
-          {/* Connected Emissors Display */}
           {isPrincipal && connectedEmissors.length > 0 && (
             <View style={styles.emissorsSection}>
               <Text style={styles.emissorsTitle}>
-                📡 Emissores Conectados ({connectedEmissors.length})
+                {'Emissores Conectados (' + String(connectedEmissors.length) + ')'}
               </Text>
               {connectedEmissors.map((emissor) => (
                 <View key={emissor.id} style={styles.emissorItem}>
@@ -768,7 +753,7 @@ export default function CountingScreen() {
                     <Text style={styles.emissorStatus}>Enviando dados automaticamente</Text>
                   </View>
                   <View style={styles.emissorSignal}>
-                    <Text style={styles.signalText}>{emissor.signal}%</Text>
+                    <Text style={styles.signalText}>{String(emissor.signal) + '%'}</Text>
                   </View>
                 </View>
               ))}
@@ -782,10 +767,9 @@ export default function CountingScreen() {
             </View>
           )}
 
-          {/* Bluetooth Section */}
           <View style={styles.bluetoothSection}>
             <View style={styles.bluetoothHeader}>
-              <Text style={styles.bluetoothTitle}>Sincronização via Bluetooth</Text>
+              <Text style={styles.bluetoothTitle}>Sincronizacao via Bluetooth</Text>
               <TouchableOpacity 
                 style={[styles.scanButton, (!bluetoothEnabled || isActive) && styles.disabledButton]} 
                 onPress={scanBluetoothDevices}
@@ -802,7 +786,6 @@ export default function CountingScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Available Devices */}
             {availableDevices.length > 0 && (
               <View style={styles.devicesContainer}>
                 <Text style={styles.devicesTitle}>Dispositivos Encontrados:</Text>
@@ -831,11 +814,11 @@ export default function CountingScreen() {
                       />
                       <View style={styles.deviceDetails}>
                         <Text style={styles.deviceName}>{device.name}</Text>
-                        <Text style={styles.deviceSignal}>Sinal: {device.signal}%</Text>
+                        <Text style={styles.deviceSignal}>{'Sinal: ' + String(device.signal) + '%'}</Text>
                       </View>
                     </View>
                     <Text style={styles.deviceStatus}>
-                      {device.status === 'available' && 'Disponível'}
+                      {device.status === 'available' && 'Disponivel'}
                       {device.status === 'connecting' && 'Conectando...'}
                       {device.status === 'connected' && 'Conectado'}
                     </Text>
@@ -848,30 +831,28 @@ export default function CountingScreen() {
               <View style={styles.bluetoothDisabled}>
                 <MaterialIcons name="bluetooth-disabled" size={24} color="#DC2626" />
                 <Text style={styles.bluetoothDisabledText}>
-                  Ative o Bluetooth para buscar dispositivos próximos
+                  Ative o Bluetooth para buscar dispositivos proximos
                 </Text>
               </View>
             )}
           </View>
         </View>
 
-        {/* Timer Section */}
         <View style={styles.timerSection}>
           <View style={styles.timerDisplay}>
             <MaterialIcons name="timer" size={32} color="#1E40AF" />
             <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-            <Text style={styles.countText}>Contagem {currentCount}/20</Text>
+            <Text style={styles.countText}>{'Contagem ' + String(currentCount) + '/20'}</Text>
           </View>
           
-          {horaInicio && (
-            <Text style={styles.startTimeText}>Iniciado às: {horaInicio}</Text>
-          )}
-          {horaFinal && !isActive && (
-            <Text style={styles.endTimeText}>Finalizado às: {horaFinal}</Text>
-          )}
+          {horaInicio ? (
+            <Text style={styles.startTimeText}>{'Iniciado as: ' + horaInicio}</Text>
+          ) : null}
+          {horaFinal && !isActive ? (
+            <Text style={styles.endTimeText}>{'Finalizado as: ' + horaFinal}</Text>
+          ) : null}
         </View>
 
-        {/* Control Buttons */}
         <View style={styles.controlSection}>
           {!isActive ? (
             <TouchableOpacity style={styles.startButton} onPress={startCounting}>
@@ -893,7 +874,6 @@ export default function CountingScreen() {
           )}
         </View>
 
-        {/* Current Count Input */}
         {isActive && (
           <View style={styles.countInputSection}>
             <Text style={styles.sectionTitle}>Contagem Atual</Text>
@@ -903,7 +883,7 @@ export default function CountingScreen() {
                 <Text style={styles.countLabel}>Bodeco</Text>
                 <View style={styles.countControls}>
                   <View style={styles.countDisplay}>
-                    <Text style={styles.countValue}>{currentBodeco}</Text>
+                    <Text style={styles.countValue}>{String(currentBodeco)}</Text>
                   </View>
                   
                   <TouchableOpacity 
@@ -919,7 +899,7 @@ export default function CountingScreen() {
                 <Text style={styles.countLabel}>Pirarucu</Text>
                 <View style={styles.countControls}>
                   <View style={styles.countDisplay}>
-                    <Text style={styles.countValue}>{currentPirarucu}</Text>
+                    <Text style={styles.countValue}>{String(currentPirarucu)}</Text>
                   </View>
                   
                   <TouchableOpacity 
@@ -939,47 +919,44 @@ export default function CountingScreen() {
           </View>
         )}
 
-        {/* Summary */}
         {contagens.length > 0 && (
           <View style={styles.summarySection}>
             <Text style={styles.sectionTitle}>Resumo da Contagem</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Bodecos</Text>
-                <Text style={styles.summaryValue}>{totalBodeco}</Text>
+                <Text style={styles.summaryValue}>{String(totalBodeco)}</Text>
               </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Pirarucus</Text>
-                <Text style={styles.summaryValue}>{totalPirarucu}</Text>
+                <Text style={styles.summaryValue}>{String(totalPirarucu)}</Text>
               </View>
             </View>
             <Text style={styles.registeredCounts}>
-              Contagens registradas: {contagens.length}
+              {'Contagens registradas: ' + String(contagens.length)}
             </Text>
           </View>
-                )}
+        )}
 
-        {/* Reset Button */}
         <View style={styles.resetSection}>
           <TouchableOpacity 
             style={styles.resetAllButton} 
             onPress={async () => {
               try {
                 await AsyncStorage.removeItem('pirarucu_sessions');
-                setSessions([]);
                 resetSession();
-                console.log('✅ Todos os dados foram apagados');
+                console.log('Todos os dados foram apagados');
               } catch (error) {
-                console.log('❌ Erro ao apagar dados:', error);
+                console.log('Erro ao apagar dados');
               }
             }}
           >
             <MaterialIcons name="delete-forever" size={24} color="white" />
             <Text style={styles.resetAllText}>Apagar Todos os Dados</Text>
           </TouchableOpacity>
-        </View>      </ScrollView>
+        </View>
+      </ScrollView>
 
-      {/* Principal Confirmation Modal */}
       <Modal visible={showPrincipalConfirm} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -989,7 +966,7 @@ export default function CountingScreen() {
             </View>
             
             <Text style={styles.modalDescription}>
-              Como receptor principal, este dispositivo irá:
+              Como receptor principal, este dispositivo ira:
             </Text>
             
             <View style={styles.modalFeatures}>
@@ -1008,13 +985,13 @@ export default function CountingScreen() {
               <View style={styles.modalFeature}>
                 <MaterialIcons name="check-circle" size={20} color="#16A34A" />
                 <Text style={styles.modalFeatureText}>
-                  Gerar relatório consolidado
+                  Gerar relatorio consolidado
                 </Text>
               </View>
             </View>
 
             <Text style={styles.modalWarning}>
-              ⚠️ Outros dispositivos conectados se tornarão emissores automaticamente
+              Outros dispositivos conectados se tornarao emissores automaticamente
             </Text>
             
             <View style={styles.modalActions}>
@@ -1213,7 +1190,7 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  emissorDetails: {
+  emissorSubtext: {
     fontSize: 11,
     color: '#6B7280',
     marginTop: 2,
@@ -1236,9 +1213,6 @@ const styles = StyleSheet.create({
   },
   receiveButton: {
     backgroundColor: '#2563EB',
-  },
-  principalButton: {
-    backgroundColor: '#16A34A',
   },
   sendButton: {
     backgroundColor: '#059669',
@@ -1276,6 +1250,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#F59E0B',
+  },
+  emissorDetails: {
+    flex: 1,
+    marginLeft: 8,
   },
   emissorName: {
     fontSize: 14,
@@ -1619,7 +1597,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },  resetAllText: {
+  },
+  resetAllText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
