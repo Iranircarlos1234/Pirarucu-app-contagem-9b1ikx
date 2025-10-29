@@ -51,11 +51,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="relatorio"
         options={{
-          title: 'Relatório Final',
+          title: 'Relatorio Final',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="table-chart" size={size} color={color} />
           ),
-          headerTitle: 'Relatório Final',
+          headerTitle: 'Relatorio Final',
         }}
       />
       <Tabs.Screen
@@ -65,7 +65,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="sync" size={size} color={color} />
           ),
-          headerTitle: 'Sincronização de Dados',
+          headerTitle: 'Sincronizacao de Dados',
         }}
       />
     </Tabs>
