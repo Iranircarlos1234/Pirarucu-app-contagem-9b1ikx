@@ -42,6 +42,11 @@ interface ManualEntry {
   isManual: boolean;
 }
 
+interface TableEntry extends ManualEntry {
+  sessionId?: string;
+  registroNumero?: number;
+}
+
 interface EnvironmentGroup {
   ambiente: string;
   recentSession: CountSession;
@@ -56,12 +61,11 @@ interface EnvironmentGroup {
 export default function RelatorioScreen() {
   const navigation = useNavigation();
   const [environmentGroups, setEnvironmentGroups] = useState<EnvironmentGroup[]>([]);
-  const [manualEntries, setManualEntries] = useState<ManualEntry[]>([]);
+  const [tableEntries, setTableEntries] = useState<TableEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   
-  // Estados para nova entrada manual
   const [newEntry, setNewEntry] = useState({
     contador: '',
     ambiente: '',
@@ -69,7 +73,6 @@ export default function RelatorioScreen() {
     bodeco: '',
   });
 
-  // Estados para edição
   const [editEntry, setEditEntry] = useState({
     contador: '',
     ambiente: '',
@@ -101,19 +104,43 @@ export default function RelatorioScreen() {
 
   const loadData = async () => {
     try {
+      // Carregar sessões automáticas
       const storedSessions = await AsyncStorage.getItem('pirarucu_sessions');
-      if (storedSessions) {
-        const sessions: CountSession[] = JSON.parse(storedSessions);
-        const grouped = groupSessionsByEnvironment(sessions);
-        setEnvironmentGroups(grouped);
-      } else {
-        setEnvironmentGroups([]);
-      }
+      const sessions: CountSession[] = storedSessions ? JSON.parse(storedSessions) : [];
+      
+      // Agrupar por ambiente
+      const grouped = groupSessionsByEnvironment(sessions);
+      setEnvironmentGroups(grouped);
 
+      // Carregar entradas manuais
       const storedManualEntries = await AsyncStorage.getItem('manual_entries');
-      if (storedManualEntries) {
-        setManualEntries(JSON.parse(storedManualEntries));
-      }
+      const manualEntries: ManualEntry[] = storedManualEntries ? JSON.parse(storedManualEntries) : [];
+
+      // Converter sessões em entradas de tabela
+      const autoEntries: TableEntry[] = [];
+      sessions.forEach(session => {
+        session.contagens.forEach(contagem => {
+          autoEntries.push({
+            id: `${session.id}_${contagem.numero}`,
+            sessionId: session.id,
+            registroNumero: contagem.numero,
+            contador: session.contador,
+            ambiente: session.ambiente,
+            pirarucu: contagem.pirarucu,
+            bodeco: contagem.bodeco,
+            total: contagem.pirarucu + contagem.bodeco,
+            timestamp: contagem.timestamp,
+            isManual: false
+          });
+        });
+      });
+
+      // Mesclar entradas automáticas e manuais
+      const allEntries = [...autoEntries, ...manualEntries].sort((a, b) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+
+      setTableEntries(allEntries);
     } catch (error) {
       console.log('Erro ao carregar dados');
     } finally {
@@ -133,8 +160,8 @@ export default function RelatorioScreen() {
 
     return Object.entries(groups).map(([ambiente, sessions]) => {
       const sortedSessions = sessions.sort((a, b) => {
-        const timeA = new Date(String('2024-01-01 ') + String(a.horaFinal)).getTime();
-        const timeB = new Date(String('2024-01-01 ') + String(b.horaFinal)).getTime();
+        const timeA = new Date(`2024-01-01 ${a.horaFinal}`).getTime();
+        const timeB = new Date(`2024-01-01 ${b.horaFinal}`).getTime();
         return timeB - timeA;
       });
 
@@ -183,23 +210,29 @@ export default function RelatorioScreen() {
         pirarucu,
         bodeco,
         total: pirarucu + bodeco,
-        timestamp: new Date().toLocaleString('pt-BR'),
+        timestamp: new Date().toISOString(),
         isManual: true
       };
 
+      const storedManualEntries = await AsyncStorage.getItem('manual_entries');
+      const manualEntries = storedManualEntries ? JSON.parse(storedManualEntries) : [];
       const updatedEntries = [...manualEntries, entry];
+      
       await AsyncStorage.setItem('manual_entries', JSON.stringify(updatedEntries));
-      setManualEntries(updatedEntries);
       
       setNewEntry({ contador: '', ambiente: '', pirarucu: '', bodeco: '' });
       setShowAddModal(false);
+      await loadData();
+      
       console.log('Entrada manual adicionada com sucesso');
     } catch (error) {
       console.log('Erro ao adicionar entrada manual');
     }
   };
 
-  const startEdit = (entry: ManualEntry) => {
+  const startEdit = (entry: TableEntry) => {
+    if (!entry.isManual) return; // Não permitir editar entradas automáticas
+    
     setEditingId(entry.id);
     setEditEntry({
       contador: entry.contador,
@@ -214,7 +247,10 @@ export default function RelatorioScreen() {
       const pirarucu = parseInt(editEntry.pirarucu) || 0;
       const bodeco = parseInt(editEntry.bodeco) || 0;
 
-      const updatedEntries = manualEntries.map(entry =>
+      const storedManualEntries = await AsyncStorage.getItem('manual_entries');
+      const manualEntries = storedManualEntries ? JSON.parse(storedManualEntries) : [];
+      
+      const updatedEntries = manualEntries.map((entry: ManualEntry) =>
         entry.id === id
           ? {
               ...entry,
@@ -228,8 +264,9 @@ export default function RelatorioScreen() {
       );
 
       await AsyncStorage.setItem('manual_entries', JSON.stringify(updatedEntries));
-      setManualEntries(updatedEntries);
       setEditingId(null);
+      await loadData();
+      
       console.log('Entrada atualizada com sucesso');
     } catch (error) {
       console.log('Erro ao atualizar entrada');
@@ -238,9 +275,13 @@ export default function RelatorioScreen() {
 
   const deleteEntry = async (id: string) => {
     try {
-      const updatedEntries = manualEntries.filter(entry => entry.id !== id);
+      const storedManualEntries = await AsyncStorage.getItem('manual_entries');
+      const manualEntries = storedManualEntries ? JSON.parse(storedManualEntries) : [];
+      
+      const updatedEntries = manualEntries.filter((entry: ManualEntry) => entry.id !== id);
       await AsyncStorage.setItem('manual_entries', JSON.stringify(updatedEntries));
-      setManualEntries(updatedEntries);
+      await loadData();
+      
       console.log('Entrada removida com sucesso');
     } catch (error) {
       console.log('Erro ao remover entrada');
@@ -257,15 +298,15 @@ export default function RelatorioScreen() {
         dataToExport = environmentGroups;
       }
 
-      if (dataToExport.length === 0 && manualEntries.length === 0) {
+      if (dataToExport.length === 0 && tableEntries.length === 0) {
         console.log('Nenhum dado para exportar');
         return;
       }
 
       const exportContent = generateExportContent(dataToExport);
       const fileName = environmentGroup 
-        ? String('Relatorio_') + String(environmentGroup.ambiente) + String('_') + String(new Date().toISOString().split('T')[0]) + String('.csv')
-        : String('Relatorio_Completo_') + String(new Date().toISOString().split('T')[0]) + String('.csv');
+        ? `Relatorio_${environmentGroup.ambiente}_${new Date().toISOString().split('T')[0]}.csv`
+        : `Relatorio_Completo_${new Date().toISOString().split('T')[0]}.csv`;
       
       if (Platform.OS === 'web') {
         downloadFile(exportContent, fileName);
@@ -273,7 +314,7 @@ export default function RelatorioScreen() {
         const { Share } = require('react-native');
         await Share.share({
           message: exportContent,
-          title: String('Relatorio - ') + String(environmentGroup?.ambiente || 'Completo'),
+          title: `Relatorio - ${environmentGroup?.ambiente || 'Completo'}`,
         });
       }
     } catch (error) {
@@ -286,22 +327,22 @@ export default function RelatorioScreen() {
     let content = '\ufeff';
     
     content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
-    content += String('Data de Exportacao: ') + String(today) + String('\n\n');
+    content += `Data de Exportacao: ${today}\n\n`;
     
     content += 'RESUMO GERAL POR AMBIENTE\n';
     content += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
     
     environmentGroups.forEach(env => {
-      content += String(env.ambiente) + String(';') + String(env.totalBodecos) + String(';') + String(env.totalPirarucus) + String(';') + String(env.totalGeral) + String(';') + String(env.contadores.length) + String('\n');
+      content += `${env.ambiente};${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};${env.contadores.length}\n`;
     });
     
     content += '\n';
     
     let globalOrder = 1;
     
-    environmentGroups.forEach(env => {
-      content += String('\n=== AMBIENTE: ') + String(env.ambiente) + String(' ===\n');
-      content += String('Resumo: ') + String(env.totalBodecos) + String(' bodecos, ') + String(env.totalPirarucus) + String(' pirarucus, ') + String(env.contadores.length) + String(' contadores\n\n');
+    environmentGroups.forEach((env) => {
+      content += `\n=== AMBIENTE: ${env.ambiente} ===\n`;
+      content += `Resumo: ${env.totalBodecos} bodecos, ${env.totalPirarucus} pirarucus, ${env.contadores.length} contadores\n\n`;
       
       content += 'Ordem de Contagem;Data;Ambiente;Nome do Contador;Hora Inicial;Hora Final;Total Minutos;Registro Contagem;Pirarucu;Bodeco;Total\n';
       
@@ -355,16 +396,17 @@ export default function RelatorioScreen() {
       });
       
       content += '\n';
-      content += String('TOTAIS ') + String(env.ambiente) + String(';;;;;;;;;') + String(env.totalBodecos) + String(';') + String(env.totalPirarucus) + String(';') + String(env.totalGeral) + String('\n');
+      content += `TOTAIS ${env.ambiente};;;;;;;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral}\n`;
       content += '\n';
     });
 
+    const manualEntries = tableEntries.filter(e => e.isManual);
     if (manualEntries.length > 0) {
       content += '\n=== ENTRADAS MANUAIS ===\n';
       content += 'Ordem;Data;Contador;Ambiente;Pirarucu;Bodeco;Total\n';
       
       manualEntries.forEach((entry, index) => {
-        content += String(index + 1) + String(';') + String(entry.timestamp) + String(';') + String(entry.contador) + String(';') + String(entry.ambiente) + String(';') + String(entry.pirarucu) + String(';') + String(entry.bodeco) + String(';') + String(entry.total) + String('\n');
+        content += `${index + 1};${new Date(entry.timestamp).toLocaleString('pt-BR')};${entry.contador};${entry.ambiente};${entry.pirarucu};${entry.bodeco};${entry.total}\n`;
       });
     }
     
@@ -375,11 +417,11 @@ export default function RelatorioScreen() {
     const totalGeralContadores = environmentGroups.reduce((sum, env) => sum + env.contadores.length, 0);
     
     content += '\n=== RESUMO FINAL ===\n';
-    content += String('Total de Ambientes: ') + String(environmentGroups.length) + String('\n');
-    content += String('Total de Contadores: ') + String(totalGeralContadores) + String('\n');
-    content += String('Total de Bodecos: ') + String(totalGeralBodecos) + String('\n');
-    content += String('Total de Pirarucus: ') + String(totalGeralPirarucus) + String('\n');
-    content += String('Total Geral: ') + String(totalGeralBodecos + totalGeralPirarucus) + String('\n');
+    content += `Total de Ambientes: ${environmentGroups.length}\n`;
+    content += `Total de Contadores: ${totalGeralContadores}\n`;
+    content += `Total de Bodecos: ${totalGeralBodecos}\n`;
+    content += `Total de Pirarucus: ${totalGeralPirarucus}\n`;
+    content += `Total Geral: ${totalGeralBodecos + totalGeralPirarucus}\n`;
     
     return content;
   };
@@ -398,9 +440,9 @@ export default function RelatorioScreen() {
 
   const getTotalSummary = () => {
     const totalBodecos = environmentGroups.reduce((sum, env) => sum + env.totalBodecos, 0) + 
-                        manualEntries.reduce((sum, entry) => sum + entry.bodeco, 0);
+                        tableEntries.filter(e => e.isManual).reduce((sum, entry) => sum + entry.bodeco, 0);
     const totalPirarucus = environmentGroups.reduce((sum, env) => sum + env.totalPirarucus, 0) + 
-                          manualEntries.reduce((sum, entry) => sum + entry.pirarucu, 0);
+                          tableEntries.filter(e => e.isManual).reduce((sum, entry) => sum + entry.pirarucu, 0);
     return {
       totalBodecos,
       totalPirarucus,
@@ -454,7 +496,7 @@ export default function RelatorioScreen() {
 
         <View style={styles.manualEntrySection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Tabela de Contagem Manual</Text>
+            <Text style={styles.sectionTitle}>Tabela de Contagem ({tableEntries.length})</Text>
             <TouchableOpacity 
               style={styles.addButton}
               onPress={() => setShowAddModal(true)}
@@ -472,11 +514,18 @@ export default function RelatorioScreen() {
                 <Text style={[styles.tableHeaderCell, styles.numberColumn]}>Pirarucu</Text>
                 <Text style={[styles.tableHeaderCell, styles.numberColumn]}>Bodeco</Text>
                 <Text style={[styles.tableHeaderCell, styles.numberColumn]}>Total</Text>
+                <Text style={[styles.tableHeaderCell, styles.typeColumn]}>Tipo</Text>
                 <Text style={[styles.tableHeaderCell, styles.actionColumn]}>Acoes</Text>
               </View>
 
-              {manualEntries.map((entry) => (
-                <View key={entry.id} style={styles.tableRow}>
+              {tableEntries.map((entry) => (
+                <View 
+                  key={entry.id} 
+                  style={[
+                    styles.tableRow,
+                    !entry.isManual && styles.autoTableRow
+                  ]}
+                >
                   {editingId === entry.id ? (
                     <>
                       <TextInput
@@ -506,8 +555,11 @@ export default function RelatorioScreen() {
                         placeholder="0"
                       />
                       <Text style={[styles.tableCell, styles.numberColumn]}>
-                        {String((parseInt(editEntry.pirarucu) || 0) + (parseInt(editEntry.bodeco) || 0))}
+                        {(parseInt(editEntry.pirarucu) || 0) + (parseInt(editEntry.bodeco) || 0)}
                       </Text>
+                      <View style={[styles.typeBadge, styles.typeColumn]}>
+                        <Text style={styles.typeBadgeText}>MANUAL</Text>
+                      </View>
                       <View style={[styles.actionButtons, styles.actionColumn]}>
                         <TouchableOpacity 
                           style={styles.saveButton}
@@ -527,33 +579,49 @@ export default function RelatorioScreen() {
                     <>
                       <Text style={[styles.tableCell, styles.contadorColumn]}>{entry.contador}</Text>
                       <Text style={[styles.tableCell, styles.ambienteColumn]}>{entry.ambiente}</Text>
-                      <Text style={[styles.tableCell, styles.numberColumn]}>{String(entry.pirarucu)}</Text>
-                      <Text style={[styles.tableCell, styles.numberColumn]}>{String(entry.bodeco)}</Text>
-                      <Text style={[styles.tableCell, styles.numberColumn, styles.totalCell]}>{String(entry.total)}</Text>
+                      <Text style={[styles.tableCell, styles.numberColumn]}>{entry.pirarucu}</Text>
+                      <Text style={[styles.tableCell, styles.numberColumn]}>{entry.bodeco}</Text>
+                      <Text style={[styles.tableCell, styles.numberColumn, styles.totalCell]}>{entry.total}</Text>
+                      <View style={[styles.typeBadge, styles.typeColumn, entry.isManual ? styles.manualBadge : styles.autoBadge]}>
+                        <Text style={styles.typeBadgeText}>
+                          {entry.isManual ? 'MANUAL' : 'AUTO'}
+                        </Text>
+                        {!entry.isManual && entry.registroNumero && (
+                          <Text style={styles.registroText}>#{entry.registroNumero}</Text>
+                        )}
+                      </View>
                       <View style={[styles.actionButtons, styles.actionColumn]}>
-                        <TouchableOpacity 
-                          style={styles.editButton}
-                          onPress={() => startEdit(entry)}
-                        >
-                          <MaterialIcons name="edit" size={20} color="white" />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={styles.deleteButton}
-                          onPress={() => deleteEntry(entry.id)}
-                        >
-                          <MaterialIcons name="delete" size={20} color="white" />
-                        </TouchableOpacity>
+                        {entry.isManual ? (
+                          <>
+                            <TouchableOpacity 
+                              style={styles.editButton}
+                              onPress={() => startEdit(entry)}
+                            >
+                              <MaterialIcons name="edit" size={20} color="white" />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.deleteButton}
+                              onPress={() => deleteEntry(entry.id)}
+                            >
+                              <MaterialIcons name="delete" size={20} color="white" />
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <View style={styles.lockedIndicator}>
+                            <MaterialIcons name="lock" size={20} color="#9CA3AF" />
+                          </View>
+                        )}
                       </View>
                     </>
                   )}
                 </View>
               ))}
 
-              {manualEntries.length === 0 && (
+              {tableEntries.length === 0 && (
                 <View style={styles.emptyTable}>
                   <MaterialIcons name="table-chart" size={48} color="#9CA3AF" />
-                  <Text style={styles.emptyTableText}>Nenhuma entrada manual</Text>
-                  <Text style={styles.emptyTableSubtext}>Toque em Adicionar para criar uma nova entrada</Text>
+                  <Text style={styles.emptyTableText}>Nenhuma contagem registrada</Text>
+                  <Text style={styles.emptyTableSubtext}>Registre contagens na aba Contagem ou adicione manualmente</Text>
                 </View>
               )}
             </View>
@@ -561,7 +629,7 @@ export default function RelatorioScreen() {
         </View>
 
         <View style={styles.currentCountSection}>
-          <Text style={styles.sectionTitle}>Novo Relatorio - Contagem Atual ({String(environmentGroups.length)})</Text>
+          <Text style={styles.sectionTitle}>Novo Relatorio - Contagem Atual ({environmentGroups.length})</Text>
           
           {environmentGroups.length === 0 ? (
             <View style={styles.emptyState}>
@@ -607,22 +675,22 @@ export default function RelatorioScreen() {
                   <View style={styles.recentSessionContainer}>
                     <Text style={styles.recentSessionTitle}>Contagem Atual:</Text>
                     <View style={styles.recentSessionInfo}>
-                      <Text style={styles.sessionContador}>{String(envGroup.recentSession.contador)}</Text>
-                      <Text style={styles.sessionTime}>{String(envGroup.recentSession.horaInicio)} - {String(envGroup.recentSession.horaFinal)}</Text>
-                      <Text style={styles.sessionSetor}>{String(envGroup.recentSession.setor)}</Text>
+                      <Text style={styles.sessionContador}>{envGroup.recentSession.contador}</Text>
+                      <Text style={styles.sessionTime}>{envGroup.recentSession.horaInicio} - {envGroup.recentSession.horaFinal}</Text>
+                      <Text style={styles.sessionSetor}>{envGroup.recentSession.setor}</Text>
                     </View>
                     
                     <View style={styles.recentSessionTotals}>
                       <View style={styles.totalItem}>
-                        <Text style={styles.totalValue}>{String(envGroup.recentSession.totalBodeco)}</Text>
+                        <Text style={styles.totalValue}>{envGroup.recentSession.totalBodeco}</Text>
                         <Text style={styles.totalLabel}>Bodecos</Text>
                       </View>
                       <View style={styles.totalItem}>
-                        <Text style={styles.totalValue}>{String(envGroup.recentSession.totalPirarucu)}</Text>
+                        <Text style={styles.totalValue}>{envGroup.recentSession.totalPirarucu}</Text>
                         <Text style={styles.totalLabel}>Pirarucus</Text>
                       </View>
                       <View style={styles.totalItem}>
-                        <Text style={styles.totalValue}>{String(envGroup.recentSession.contagens.length)}</Text>
+                        <Text style={styles.totalValue}>{envGroup.recentSession.contagens.length}</Text>
                         <Text style={styles.totalLabel}>Registros</Text>
                       </View>
                     </View>
@@ -630,18 +698,18 @@ export default function RelatorioScreen() {
 
                   {envGroup.expanded && (
                     <View style={styles.expandedContainer}>
-                      <Text style={styles.expandedTitle}>Historico Completo ({String(envGroup.allSessions.length)} contagens):</Text>
+                      <Text style={styles.expandedTitle}>Historico Completo ({envGroup.allSessions.length} contagens):</Text>
                       {envGroup.allSessions.map((session) => (
                         <View key={session.id} style={styles.sessionItem}>
                           <View style={styles.sessionHeader}>
-                            <Text style={styles.sessionContador}>{String(session.contador)}</Text>
-                            <Text style={styles.sessionTime}>{String(session.horaInicio)} - {String(session.horaFinal)}</Text>
+                            <Text style={styles.sessionContador}>{session.contador}</Text>
+                            <Text style={styles.sessionTime}>{session.horaInicio} - {session.horaFinal}</Text>
                           </View>
-                          <Text style={styles.sessionSetor}>{String(session.setor)}</Text>
+                          <Text style={styles.sessionSetor}>{session.setor}</Text>
                           <View style={styles.sessionStats}>
-                            <Text style={styles.sessionStat}>Bodecos: {String(session.totalBodeco)}</Text>
-                            <Text style={styles.sessionStat}>Pirarucus: {String(session.totalPirarucu)}</Text>
-                            <Text style={styles.sessionStat}>Registros: {String(session.contagens.length)}</Text>
+                            <Text style={styles.sessionStat}>Bodecos: {session.totalBodeco}</Text>
+                            <Text style={styles.sessionStat}>Pirarucus: {session.totalPirarucu}</Text>
+                            <Text style={styles.sessionStat}>Registros: {session.contagens.length}</Text>
                           </View>
                         </View>
                       ))}
@@ -650,15 +718,15 @@ export default function RelatorioScreen() {
                         <Text style={styles.totalSummaryTitle}>Total do Ambiente {envGroup.ambiente}:</Text>
                         <View style={styles.totalSummaryStats}>
                           <View style={styles.totalSummaryItem}>
-                            <Text style={styles.totalSummaryValue}>{String(envGroup.totalBodecos)}</Text>
+                            <Text style={styles.totalSummaryValue}>{envGroup.totalBodecos}</Text>
                             <Text style={styles.totalSummaryLabel}>Total Bodecos</Text>
                           </View>
                           <View style={styles.totalSummaryItem}>
-                            <Text style={styles.totalSummaryValue}>{String(envGroup.totalPirarucus)}</Text>
+                            <Text style={styles.totalSummaryValue}>{envGroup.totalPirarucus}</Text>
                             <Text style={styles.totalSummaryLabel}>Total Pirarucus</Text>
                           </View>
                           <View style={styles.totalSummaryItem}>
-                            <Text style={styles.totalSummaryValue}>{String(envGroup.totalGeral)}</Text>
+                            <Text style={styles.totalSummaryValue}>{envGroup.totalGeral}</Text>
                             <Text style={styles.totalSummaryLabel}>Total Geral</Text>
                           </View>
                         </View>
@@ -672,20 +740,20 @@ export default function RelatorioScreen() {
                 <Text style={styles.finalTotalTitle}>SOMA TOTAL DE TODOS OS AMBIENTES</Text>
                 <View style={styles.finalTotalStats}>
                   <View style={styles.finalTotalItem}>
-                    <Text style={styles.finalTotalValue}>{String(totalSummary.totalBodecos)}</Text>
+                    <Text style={styles.finalTotalValue}>{totalSummary.totalBodecos}</Text>
                     <Text style={styles.finalTotalLabel}>Total Bodecos</Text>
                   </View>
                   <View style={styles.finalTotalItem}>
-                    <Text style={styles.finalTotalValue}>{String(totalSummary.totalPirarucus)}</Text>
+                    <Text style={styles.finalTotalValue}>{totalSummary.totalPirarucus}</Text>
                     <Text style={styles.finalTotalLabel}>Total Pirarucus</Text>
                   </View>
                   <View style={styles.finalTotalItem}>
-                    <Text style={styles.finalTotalValue}>{String(totalSummary.totalGeral)}</Text>
+                    <Text style={styles.finalTotalValue}>{totalSummary.totalGeral}</Text>
                     <Text style={styles.finalTotalLabel}>TOTAL GERAL</Text>
                   </View>
                 </View>
                 <Text style={styles.finalTotalSubtext}>
-                  {String(totalSummary.totalAmbientes)} ambientes - Dados atualizados automaticamente
+                  {totalSummary.totalAmbientes} ambientes - Dados atualizados automaticamente
                 </Text>
               </View>
             </>
@@ -740,7 +808,7 @@ export default function RelatorioScreen() {
                 <View style={styles.totalPreview}>
                   <Text style={styles.totalPreviewLabel}>Total:</Text>
                   <Text style={styles.totalPreviewValue}>
-                    {String((parseInt(newEntry.pirarucu) || 0) + (parseInt(newEntry.bodeco) || 0))}
+                    {(parseInt(newEntry.pirarucu) || 0) + (parseInt(newEntry.bodeco) || 0)}
                   </Text>
                 </View>
               </View>
@@ -872,7 +940,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   tableContainer: {
-    minWidth: 800,
+    minWidth: 1000,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -896,17 +964,25 @@ const styles = StyleSheet.create({
   numberColumn: {
     width: 100,
   },
+  typeColumn: {
+    width: 120,
+  },
   actionColumn: {
     width: 120,
   },
   tableRow: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     alignItems: 'center',
+  },
+  autoTableRow: {
+    backgroundColor: '#EFF6FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
   },
   tableCell: {
     fontSize: 14,
@@ -926,6 +1002,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 14,
     textAlign: 'center',
+  },
+  typeBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  autoBadge: {
+    backgroundColor: '#DBEAFE',
+  },
+  manualBadge: {
+    backgroundColor: '#FEF3C7',
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+  },
+  registroText: {
+    fontSize: 9,
+    color: '#6B7280',
+    marginTop: 2,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -951,6 +1050,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#6B7280',
     padding: 8,
     borderRadius: 6,
+  },
+  lockedIndicator: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
   },
   emptyTable: {
     alignItems: 'center',
