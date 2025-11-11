@@ -791,39 +791,9 @@ export default function SyncScreen() {
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Sincronizacao Rapida</Text>
           
-          <TouchableOpacity style={styles.actionButton} onPress={shareData}>
-            <MaterialIcons name="share" size={24} color="white" />
-            <Text style={styles.actionButtonText}>Compartilhar Dados</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.actionButton} onPress={() => setShowImportModal(true)}>
             <MaterialIcons name="file-download" size={24} color="white" />
             <Text style={styles.actionButtonText}>Importar Dados</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.actionButton, styles.exportButton]} onPress={prepareExportData}>
-            <MaterialIcons name="code" size={24} color="white" />
-            <Text style={styles.actionButtonText}>Gerar Codigo de Exportacao</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.resetButton]} 
-            onPress={async () => {
-              try {
-                await AsyncStorage.removeItem('pirarucu_sessions');
-                await AsyncStorage.removeItem('connected_devices');
-                await AsyncStorage.removeItem('known_devices');
-                setSessions([]);
-                setConnectedDevices([]);
-                setAvailableDevices([]);
-                console.log('Todos os dados de sincronizacao foram apagados');
-              } catch (error) {
-                console.log('Erro ao apagar dados');
-              }
-            }}
-          >
-            <MaterialIcons name="delete-forever" size={24} color="white" />
-            <Text style={styles.actionButtonText}>Apagar Todos os Dados</Text>
           </TouchableOpacity>
         </View>
 
