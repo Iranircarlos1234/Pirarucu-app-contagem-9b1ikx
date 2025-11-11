@@ -83,7 +83,7 @@ export default function CountingScreen() {
         setTimeLeft(timeLeft - 1);
       }, 1000);
     } else if (timeLeft === 0 && isActive) {
-      finishCurrentCount();
+      autoSaveAndContinue();
     }
 
     return () => {
@@ -458,13 +458,81 @@ export default function CountingScreen() {
     setSyncStatus('Contagem em andamento - Sync desabilitada');
   };
 
+  const autoSaveAndContinue = async () => {
+    if (contagens.length === 0 && currentBodeco === 0 && currentPirarucu === 0) {
+      // Se não há dados neste período, apenas avança para o próximo
+      console.log('Contagem ' + String(currentCount) + ' vazia - Avancando para proxima');
+      setTimeLeft(1200);
+      setCurrentCount(currentCount + 1);
+      setSyncStatus('Contagem ' + String(currentCount + 1) + ' iniciada automaticamente');
+      return;
+    }
+
+    // Adicionar contagem atual se houver dados pendentes
+    let finalContagens = [...contagens];
+    if (currentBodeco > 0 || currentPirarucu > 0) {
+      const pendingCount = {
+        numero: finalContagens.length + 1,
+        bodeco: currentBodeco,
+        pirarucu: currentPirarucu,
+        timestamp: new Date().toLocaleTimeString('pt-BR'),
+      };
+      finalContagens = [...finalContagens, pendingCount];
+    }
+
+    const finalTime = new Date().toLocaleTimeString('pt-BR');
+    const totalBodeco = finalContagens.reduce((sum, c) => sum + c.bodeco, 0);
+    const totalPirarucu = finalContagens.reduce((sum, c) => sum + c.pirarucu, 0);
+
+    const session: CountSession = {
+      id: Date.now().toString(),
+      ambiente,
+      setor,
+      contador,
+      horaInicio,
+      horaFinal: finalTime,
+      contagens: finalContagens,
+      totalBodeco,
+      totalPirarucu,
+    };
+
+    try {
+      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
+      const sessions = existingSessions ? JSON.parse(existingSessions) : [];
+      sessions.push(session);
+      await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(sessions));
+      
+      console.log('Contagem ' + String(currentCount) + ' salva automaticamente: ' + String(totalBodeco) + ' bodecos, ' + String(totalPirarucu) + ' pirarucus');
+      
+      // Preparar próxima contagem
+      const nextCount = currentCount + 1;
+      if (nextCount <= 20) {
+        setCurrentCount(nextCount);
+        setContagens([]);
+        setCurrentBodeco(0);
+        setCurrentPirarucu(0);
+        setHoraInicio(new Date().toLocaleTimeString('pt-BR'));
+        setTimeLeft(1200);
+        setSyncStatus('Contagem ' + String(nextCount) + ' iniciada automaticamente - ' + String(sessions.length) + ' contagens salvas');
+      } else {
+        // Finalizar após 20 contagens
+        setIsActive(false);
+        setHoraFinal(finalTime);
+        setSyncStatus('Ciclo completo: 20 contagens finalizadas');
+        console.log('Ciclo de 20 contagens completado!');
+      }
+    } catch (error) {
+      console.log('Erro ao salvar contagem automatica');
+    }
+  };
+
   const addCount = () => {
     if (!isActive) {
       return;
     }
 
     const newCount = {
-      numero: currentCount,
+      numero: contagens.length + 1,
       bodeco: currentBodeco,
       pirarucu: currentPirarucu,
       timestamp: new Date().toLocaleTimeString('pt-BR'),
@@ -475,21 +543,32 @@ export default function CountingScreen() {
     
     setCurrentBodeco(0);
     setCurrentPirarucu(0);
-    
-    saveSession(updatedContagens);
   };
 
   const finishCurrentCount = async () => {
-    if (contagens.length === 0) {
+    // Adicionar dados pendentes antes de finalizar
+    let finalContagens = [...contagens];
+    if (currentBodeco > 0 || currentPirarucu > 0) {
+      const pendingCount = {
+        numero: finalContagens.length + 1,
+        bodeco: currentBodeco,
+        pirarucu: currentPirarucu,
+        timestamp: new Date().toLocaleTimeString('pt-BR'),
+      };
+      finalContagens = [...finalContagens, pendingCount];
+    }
+
+    if (finalContagens.length === 0) {
       setIsActive(false);
       setTimeLeft(1200);
+      setCurrentCount(1);
       setSyncStatus('Pronto para sincronizacao');
       return;
     }
 
     const finalTime = new Date().toLocaleTimeString('pt-BR');
-    const totalBodeco = contagens.reduce((sum, c) => sum + c.bodeco, 0);
-    const totalPirarucu = contagens.reduce((sum, c) => sum + c.pirarucu, 0);
+    const totalBodeco = finalContagens.reduce((sum, c) => sum + c.bodeco, 0);
+    const totalPirarucu = finalContagens.reduce((sum, c) => sum + c.pirarucu, 0);
 
     const session: CountSession = {
       id: Date.now().toString(),
@@ -498,52 +577,34 @@ export default function CountingScreen() {
       contador,
       horaInicio,
       horaFinal: finalTime,
-      contagens,
+      contagens: finalContagens,
       totalBodeco,
       totalPirarucu,
     };
 
-    await saveSession(contagens, true);
+    try {
+      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
+      const sessions = existingSessions ? JSON.parse(existingSessions) : [];
+      sessions.push(session);
+      await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(sessions));
+      
+      setSyncStatus('Contagem ' + String(currentCount) + ' finalizada manualmente - ' + String(sessions.length) + ' total');
+    } catch (error) {
+      console.log('Erro ao salvar contagem final');
+    }
     
     setHoraFinal(finalTime);
     setIsActive(false);
     setTimeLeft(1200);
-    setCurrentCount(currentCount + 1);
-    setSyncStatus('Contagem finalizada - ' + String(contagens.length) + ' registros');
+    setContagens([]);
+    setCurrentBodeco(0);
+    setCurrentPirarucu(0);
+    setCurrentCount(1);
     
     generateEmissorCode();
   };
 
-  const saveSession = async (currentContagens: any[], isFinal = false) => {
-    try {
-      const existingSessions = await AsyncStorage.getItem('pirarucu_sessions');
-      const sessions = existingSessions ? JSON.parse(existingSessions) : [];
-      
-      if (isFinal) {
-        const totalBodeco = currentContagens.reduce((sum, c) => sum + c.bodeco, 0);
-        const totalPirarucu = currentContagens.reduce((sum, c) => sum + c.pirarucu, 0);
-        
-        const session: CountSession = {
-          id: Date.now().toString(),
-          ambiente,
-          setor,
-          contador,
-          horaInicio,
-          horaFinal: new Date().toLocaleTimeString('pt-BR'),
-          contagens: currentContagens,
-          totalBodeco,
-          totalPirarucu,
-        };
-        
-        sessions.push(session);
-        await AsyncStorage.setItem('pirarucu_sessions', JSON.stringify(sessions));
-        
-        setSyncStatus(String(sessions.length) + ' contagens disponiveis');
-      }
-    } catch (error) {
-      console.log('Erro ao salvar');
-    }
-  };
+
 
   const resetSession = () => {
     setIsActive(false);
@@ -554,7 +615,7 @@ export default function CountingScreen() {
     setCurrentPirarucu(0);
     setHoraInicio('');
     setHoraFinal('');
-    setSyncStatus('Pronto para sincronizacao');
+    setSyncStatus('Sessao resetada - Pronto para nova contagem');
   };
 
   const totalBodeco = contagens.reduce((sum, c) => sum + c.bodeco, 0);
@@ -845,6 +906,15 @@ export default function CountingScreen() {
             <Text style={styles.countText}>{'Contagem ' + String(currentCount) + '/20'}</Text>
           </View>
           
+          {isActive && (
+            <View style={styles.autoSaveInfo}>
+              <MaterialIcons name="save" size={16} color="#059669" />
+              <Text style={styles.autoSaveText}>
+                Salvamento automatico em {formatTime(timeLeft)}
+              </Text>
+            </View>
+          )}
+          
           {horaInicio ? (
             <Text style={styles.startTimeText}>{'Iniciado as: ' + horaInicio}</Text>
           ) : null}
@@ -919,22 +989,27 @@ export default function CountingScreen() {
           </View>
         )}
 
-        {contagens.length > 0 && (
+        {(contagens.length > 0 || isActive) && (
           <View style={styles.summarySection}>
-            <Text style={styles.sectionTitle}>Resumo da Contagem</Text>
+            <Text style={styles.sectionTitle}>{'Resumo - Contagem ' + String(currentCount)}</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Bodecos</Text>
-                <Text style={styles.summaryValue}>{String(totalBodeco)}</Text>
+                <Text style={styles.summaryValue}>{String(totalBodeco + currentBodeco)}</Text>
               </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Pirarucus</Text>
-                <Text style={styles.summaryValue}>{String(totalPirarucu)}</Text>
+                <Text style={styles.summaryValue}>{String(totalPirarucu + currentPirarucu)}</Text>
               </View>
             </View>
             <Text style={styles.registeredCounts}>
-              {'Contagens registradas: ' + String(contagens.length)}
+              {'Registros salvos: ' + String(contagens.length)}
             </Text>
+            {isActive && (currentBodeco > 0 || currentPirarucu > 0) && (
+              <Text style={styles.pendingCount}>
+                {'Pendente: ' + String(currentBodeco) + ' bodecos, ' + String(currentPirarucu) + ' pirarucus'}
+              </Text>
+            )}
           </View>
         )}
 
@@ -1580,6 +1655,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
     fontWeight: '500',
+  },
+  pendingCount: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#F59E0B',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  autoSaveInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 12,
+  },
+  autoSaveText: {
+    fontSize: 13,
+    color: '#059669',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   resetSection: {
     marginTop: 20,
