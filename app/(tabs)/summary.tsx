@@ -260,44 +260,84 @@ export default function SummaryScreen() {
     }
   };
 
+  const calculateHours = (horaInicio: string, horaFinal: string): string => {
+    try {
+      const parseTime = (timeStr: string): Date => {
+        const [time] = timeStr.split(' ');
+        const [hours, minutes, seconds] = time.split(':').map(Number);
+        const date = new Date();
+        date.setHours(hours, minutes, seconds || 0, 0);
+        return date;
+      };
+
+      const inicioTime = parseTime(horaInicio);
+      const finalTime = parseTime(horaFinal);
+      
+      let diffMs = finalTime.getTime() - inicioTime.getTime();
+      if (diffMs < 0) {
+        diffMs += 24 * 60 * 60 * 1000;
+      }
+      
+      const totalMinutes = Math.round(diffMs / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      return `${hours}h${minutes.toString().padStart(2, '0')}min`;
+    } catch (error) {
+      return '0h00min';
+    }
+  };
+
   const generateExportContent = () => {
     const overallStats = getOverallStats();
     const environmentChart = getEnvironmentChart();
+    const today = new Date().toLocaleDateString('pt-BR');
     
-    let content = '=== RELATÓRIO DE CONTAGEM DE PIRARUCU ===\n\n';
-    content += `Data do Relatório: ${new Date().toLocaleDateString('pt-BR')}\n`;
+    let content = '\ufeff';
+    content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n\n';
+    content += `Data de Exportacao: ${today}\n`;
     content += `Hora: ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
     
-    content += '--- ESTATÍSTICAS GERAIS ---\n';
+    content += 'ESTATISTICAS GERAIS\n';
     content += `Total de Contagens: ${overallStats.totalContagens}\n`;
     content += `Total de Bodecos: ${overallStats.totalBodeco}\n`;
     content += `Total de Pirarucus: ${overallStats.totalPirarucu}\n\n`;
     
-    content += '--- ANÁLISE POR AMBIENTE ---\n';
+    content += 'ANALISE POR AMBIENTE\n';
     environmentChart.forEach(env => {
-      content += `\n${env.ambiente}: ${env.total} total\n`;
+      content += `${env.ambiente}: ${env.total} total\n`;
     });
     
-    content += '\n--- DETALHES DAS CONTAGENS ---\n';
-    sessions.forEach((session, index) => {
-      content += `\nContagem ${index + 1}:\n`;
-      content += `  Ambiente: ${session.ambiente}\n`;
-      content += `  Setor: ${session.setor}\n`;
-      content += `  Contador: ${session.contador}\n`;
-      content += `  Período: ${session.horaInicio} - ${session.horaFinal}\n`;
-      content += `  Total Bodecos: ${session.totalBodeco}\n`;
-      content += `  Total Pirarucus: ${session.totalPirarucu}\n`;
-      content += `  Contagens Registradas: ${session.contagens.length}\n`;
+    content += '\n';
+    content += 'DETALHES DAS CONTAGENS\n';
+    content += 'Data;Contador;Ambiente;Numero de Contagem;Bodeco;Pirarucu;Total Geral;Hora Inicio;Hora Final;Total de Horas\n';
+    
+    sessions.forEach(session => {
+      const totalHoras = calculateHours(session.horaInicio, session.horaFinal);
+      const horaInicial = session.horaInicio.split(' ')[0] || session.horaInicio;
+      const horaFinal = session.horaFinal.split(' ')[0] || session.horaFinal;
       
-      if (session.contagens.length > 0) {
-        content += '    Contagens Individuais:\n';
-        session.contagens.forEach(contagem => {
-          content += `      ${contagem.numero}ª: ${contagem.bodeco} bodecos, ${contagem.pirarucu} pirarucus (${contagem.timestamp})\n`;
-        });
-      }
+      session.contagens.forEach(contagem => {
+        const values = [
+          today,
+          session.contador.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
+          session.ambiente.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
+          contagem.numero.toString(),
+          contagem.bodeco.toString(),
+          contagem.pirarucu.toString(),
+          (contagem.pirarucu + contagem.bodeco).toString(),
+          horaInicial,
+          horaFinal,
+          totalHoras
+        ];
+        
+        content += values.join(';') + '\n';
+      });
     });
     
-    content += '\n=== FIM DO RELATÓRIO ===';
+    content += '\n';
+    content += `TOTAIS;;;;${overallStats.totalBodeco};${overallStats.totalPirarucu};${overallStats.totalBodeco + overallStats.totalPirarucu};;;\n`;
+    content += '\n=== FIM DO RELATORIO ===';
     return content;
   };
 

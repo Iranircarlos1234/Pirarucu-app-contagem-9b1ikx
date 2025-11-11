@@ -322,6 +322,34 @@ export default function RelatorioScreen() {
     }
   };
 
+  const calculateHours = (horaInicio: string, horaFinal: string): string => {
+    try {
+      const parseTime = (timeStr: string): Date => {
+        const [time] = timeStr.split(' ');
+        const [hours, minutes, seconds] = time.split(':').map(Number);
+        const date = new Date();
+        date.setHours(hours, minutes, seconds || 0, 0);
+        return date;
+      };
+
+      const inicioTime = parseTime(horaInicio);
+      const finalTime = parseTime(horaFinal);
+      
+      let diffMs = finalTime.getTime() - inicioTime.getTime();
+      if (diffMs < 0) {
+        diffMs += 24 * 60 * 60 * 1000;
+      }
+      
+      const totalMinutes = Math.round(diffMs / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      return `${hours}h${minutes.toString().padStart(2, '0')}min`;
+    } catch (error) {
+      return '0h00min';
+    }
+  };
+
   const generateExportContent = (environmentGroups: EnvironmentGroup[]) => {
     const today = new Date().toLocaleDateString('pt-BR');
     let content = '\ufeff';
@@ -338,65 +366,38 @@ export default function RelatorioScreen() {
     
     content += '\n';
     
-    let globalOrder = 1;
-    
     environmentGroups.forEach((env) => {
       content += `\n=== AMBIENTE: ${env.ambiente} ===\n`;
       content += `Resumo: ${env.totalBodecos} bodecos, ${env.totalPirarucus} pirarucus, ${env.contadores.length} contadores\n\n`;
       
-      content += 'Ordem de Contagem;Data;Ambiente;Nome do Contador;Hora Inicial;Hora Final;Total Minutos;Registro Contagem;Pirarucu;Bodeco;Total\n';
+      // Cabeçalho na ordem solicitada
+      content += 'Data;Contador;Ambiente;Numero de Contagem;Bodeco;Pirarucu;Total Geral;Hora Inicio;Hora Final;Total de Horas\n';
       
       env.allSessions.forEach(session => {
-        const calculateMinutes = (inicio: string, final: string): number => {
-          try {
-            const parseTime = (timeStr: string): Date => {
-              const [time] = timeStr.split(' ');
-              const [hours, minutes, seconds] = time.split(':').map(Number);
-              const date = new Date();
-              date.setHours(hours, minutes, seconds || 0, 0);
-              return date;
-            };
-
-            const inicioTime = parseTime(inicio);
-            const finalTime = parseTime(final);
-            
-            let diffMs = finalTime.getTime() - inicioTime.getTime();
-            if (diffMs < 0) {
-              diffMs += 24 * 60 * 60 * 1000;
-            }
-            
-            return Math.round(diffMs / (1000 * 60));
-          } catch (error) {
-            return 0;
-          }
-        };
-
-        const totalMinutos = calculateMinutes(session.horaInicio, session.horaFinal);
+        const totalHoras = calculateHours(session.horaInicio, session.horaFinal);
         const horaInicial = session.horaInicio.split(' ')[0] || session.horaInicio;
         const horaFinal = session.horaFinal.split(' ')[0] || session.horaFinal;
 
         session.contagens.forEach(contagem => {
           const values = [
-            globalOrder.toString(),
             today,
-            session.ambiente.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
             session.contador.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
+            session.ambiente.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim(),
+            contagem.numero.toString(),
+            contagem.bodeco.toString(),
+            contagem.pirarucu.toString(),
+            (contagem.pirarucu + contagem.bodeco).toString(),
             horaInicial,
             horaFinal,
-            totalMinutos.toString(),
-            contagem.numero.toString(),
-            contagem.pirarucu.toString(),
-            contagem.bodeco.toString(),
-            (contagem.pirarucu + contagem.bodeco).toString()
+            totalHoras
           ];
           
           content += values.join(';') + '\n';
-          globalOrder++;
         });
       });
       
       content += '\n';
-      content += `TOTAIS ${env.ambiente};;;;;;;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral}\n`;
+      content += `TOTAIS ${env.ambiente};;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};;;\n`;
       content += '\n';
     });
 

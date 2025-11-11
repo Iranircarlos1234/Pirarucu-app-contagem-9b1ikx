@@ -1,4 +1,3 @@
-
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 
@@ -20,17 +19,16 @@ interface CountSession {
 }
 
 export interface ExcelRow {
-  ordemContagem: number;
   data: string;
+  contador: string;
   ambiente: string;
-  nomeContador: string;
-  horaInicial: string;
-  horaFinal: string;
-  totalMinutos: number;
-  registroContagem: number;
-  pirarucu: number;
+  numeroContagem: number;
   bodeco: number;
-  total: number;
+  pirarucu: number;
+  totalGeral: number;
+  horaInicio: string;
+  horaFinal: string;
+  totalHoras: string;
 }
 
 interface EnvironmentData {
@@ -45,12 +43,12 @@ interface EnvironmentData {
 
 const cleanText = (text: string): string => {
   return text
-    .replace(/[^\w\s]/g, '') // Remove símbolos, mantém letras, números e espaços
-    .replace(/\s+/g, ' ')    // Remove espaços duplos
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 };
 
-const calculateMinutes = (horaInicio: string, horaFinal: string): number => {
+const calculateHours = (horaInicio: string, horaFinal: string): string => {
   try {
     const parseTime = (timeStr: string): Date => {
       const [time] = timeStr.split(' ');
@@ -65,20 +63,22 @@ const calculateMinutes = (horaInicio: string, horaFinal: string): number => {
     
     let diffMs = final.getTime() - inicio.getTime();
     if (diffMs < 0) {
-      // Se hora final é menor que inicial, assumir que passou da meia-noite
       diffMs += 24 * 60 * 60 * 1000;
     }
     
-    return Math.round(diffMs / (1000 * 60)); // Converter para minutos
+    const totalMinutes = Math.round(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    return `${hours}h${minutes.toString().padStart(2, '0')}min`;
   } catch (error) {
-    return 0;
+    return '0h00min';
   }
 };
 
 const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentData[] => {
   const environmentGroups: { [key: string]: CountSession[] } = {};
   
-  // Agrupar sessões por ambiente
   sessions.forEach(session => {
     if (!environmentGroups[session.ambiente]) {
       environmentGroups[session.ambiente] = [];
@@ -86,35 +86,32 @@ const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentData[]
     environmentGroups[session.ambiente].push(session);
   });
   
-  // Processar cada ambiente
   return Object.entries(environmentGroups).map(([ambiente, sessions]) => {
     const rows: ExcelRow[] = [];
     const today = new Date().toLocaleDateString('pt-BR');
     
     sessions.forEach(session => {
-      const totalMinutos = calculateMinutes(session.horaInicio, session.horaFinal);
+      const totalHoras = calculateHours(session.horaInicio, session.horaFinal);
       
       session.contagens.forEach(contagem => {
         rows.push({
-          ordemContagem: 0, // Será preenchido após ordenação global
           data: today,
+          contador: cleanText(session.contador),
           ambiente: cleanText(session.ambiente),
-          nomeContador: cleanText(session.contador),
-          horaInicial: session.horaInicio.split(' ')[0] || session.horaInicio,
-          horaFinal: session.horaFinal.split(' ')[0] || session.horaFinal,
-          totalMinutos: totalMinutos,
-          registroContagem: contagem.numero,
-          pirarucu: contagem.pirarucu,
+          numeroContagem: contagem.numero,
           bodeco: contagem.bodeco,
-          total: contagem.pirarucu + contagem.bodeco
+          pirarucu: contagem.pirarucu,
+          totalGeral: contagem.pirarucu + contagem.bodeco,
+          horaInicio: session.horaInicio.split(' ')[0] || session.horaInicio,
+          horaFinal: session.horaFinal.split(' ')[0] || session.horaFinal,
+          totalHoras: totalHoras
         });
       });
     });
     
-    // Ordenar rows dentro do ambiente
     rows.sort((a, b) => {
-      if (a.nomeContador !== b.nomeContador) return a.nomeContador.localeCompare(b.nomeContador);
-      return a.registroContagem - b.registroContagem;
+      if (a.contador !== b.contador) return a.contador.localeCompare(b.contador);
+      return a.numeroContagem - b.numeroContagem;
     });
     
     const totalBodecos = sessions.reduce((sum, s) => sum + s.totalBodeco, 0);
@@ -132,32 +129,13 @@ const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentData[]
   });
 };
 
-export const prepareExcelData = (sessions: CountSession[]): ExcelRow[] => {
-  const environmentData = groupSessionsByEnvironment(sessions);
-  const allRows: ExcelRow[] = [];
-  
-  // Combinar todas as rows e adicionar numeração sequencial
-  environmentData.forEach(env => {
-    allRows.push(...env.rows);
-  });
-  
-  // Adicionar numeração sequencial global
-  return allRows.map((row, index) => ({
-    ...row,
-    ordemContagem: index + 1
-  }));
-};
-
 export const generateXLSXContent = (sessions: CountSession[]): string => {
   const environmentData = groupSessionsByEnvironment(sessions);
-  let content = '\ufeff'; // BOM para Excel UTF-8
-  let globalOrder = 1;
+  let content = '\ufeff';
   
-    // Cabeçalho do relatório
-    content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
-  content += 'Data de Exportacao: ' + new Date().toLocaleDateString('pt-BR') + '\n\n';
+  content += 'RELATORIO CONSOLIDADO - CONTAGEM DE PIRARUCU\n';
+  content += `Data de Exportacao: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
   
-  // Resumo geral por ambiente
   content += 'RESUMO GERAL POR AMBIENTE\n';
   content += 'Ambiente;Total Bodecos;Total Pirarucus;Total Geral;Num Contadores\n';
   
@@ -167,48 +145,45 @@ export const generateXLSXContent = (sessions: CountSession[]): string => {
   
   content += '\n';
   
-  // Dados detalhados por ambiente
-  environmentData.forEach((env, envIndex) => {    content += '\n=== AMBIENTE: ' + env.ambiente + ' ===\n';
-    content += 'Resumo: ' + env.totalBodecos + ' bodecos, ' + env.totalPirarucus + ' pirarucus, ' + env.numeroContadores + ' contadores\n\n';
+  environmentData.forEach((env) => {
+    content += `\n=== AMBIENTE: ${env.ambiente} ===\n`;
+    content += `Resumo: ${env.totalBodecos} bodecos, ${env.totalPirarucus} pirarucus, ${env.numeroContadores} contadores\n\n`;
     
-    // Cabeçalhos das colunas
-    content += 'Ordem de Contagem;Data;Ambiente;Nome do Contador;Hora Inicial;Hora Final;Total Minutos;Registro Contagem;Pirarucu;Bodeco;Total\n';
+    // Cabeçalho na ordem solicitada
+    content += 'Data;Contador;Ambiente;Numero de Contagem;Bodeco;Pirarucu;Total Geral;Hora Inicio;Hora Final;Total de Horas\n';
     
-    // Dados das linhas do ambiente
     env.rows.forEach(row => {
       const values = [
-        globalOrder.toString(),
         row.data,
+        row.contador,
         row.ambiente,
-        row.nomeContador,
-        row.horaInicial,
-        row.horaFinal,
-        row.totalMinutos.toString(),
-        row.registroContagem.toString(),
-        row.pirarucu.toString(),
+        row.numeroContagem.toString(),
         row.bodeco.toString(),
-        row.total.toString()
+        row.pirarucu.toString(),
+        row.totalGeral.toString(),
+        row.horaInicio,
+        row.horaFinal,
+        row.totalHoras
       ];
       
       content += values.join(';') + '\n';
-      globalOrder++;
     });
     
-    // Totais do ambiente
-    content += '\n';    content += 'TOTAIS ' + env.ambiente + ';;;;;;;;;' + env.totalBodecos + ';' + env.totalPirarucus + ';' + env.totalGeral + '\n';
+    content += '\n';
+    content += `TOTAIS ${env.ambiente};;;;${env.totalBodecos};${env.totalPirarucus};${env.totalGeral};;;\n`;
     content += '\n';
   });
   
-  // Resumo final
   const totalGeralBodecos = environmentData.reduce((sum, env) => sum + env.totalBodecos, 0);
   const totalGeralPirarucus = environmentData.reduce((sum, env) => sum + env.totalPirarucus, 0);
   const totalGeralContadores = environmentData.reduce((sum, env) => sum + env.numeroContadores, 0);
   
-  content += '\n=== RESUMO FINAL ===\n';  content += 'Total de Ambientes: ' + environmentData.length + '\n';
-  content += 'Total de Contadores: ' + totalGeralContadores + '\n';
-  content += 'Total de Bodecos: ' + totalGeralBodecos + '\n';
-  content += 'Total de Pirarucus: ' + totalGeralPirarucus + '\n';
-  content += 'Total Geral: ' + (totalGeralBodecos + totalGeralPirarucus) + '\n';
+  content += '\n=== RESUMO FINAL ===\n';
+  content += `Total de Ambientes: ${environmentData.length}\n`;
+  content += `Total de Contadores: ${totalGeralContadores}\n`;
+  content += `Total de Bodecos: ${totalGeralBodecos}\n`;
+  content += `Total de Pirarucus: ${totalGeralPirarucus}\n`;
+  content += `Total Geral: ${totalGeralBodecos + totalGeralPirarucus}\n`;
   
   return content;
 };
@@ -219,10 +194,10 @@ export const exportToXLSX = async (sessions: CountSession[]): Promise<void> => {
       throw new Error('Nenhum dado para exportar');
     }
 
-    const xlsxContent = generateXLSXContent(sessions);    const fileName = 'Pirarucu_Contagem_' + new Date().toISOString().split('T')[0] + '.csv';
+    const xlsxContent = generateXLSXContent(sessions);
+    const fileName = `Pirarucu_Contagem_${new Date().toISOString().split('T')[0]}.csv`;
     
     if (Platform.OS === 'web') {
-      // Web: Download automático
       const blob = new Blob([xlsxContent], { 
         type: 'application/vnd.ms-excel;charset=utf-8' 
       });
@@ -235,7 +210,6 @@ export const exportToXLSX = async (sessions: CountSession[]): Promise<void> => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } else {
-      // Mobile: Compartilhamento via apps nativos
       const fileUri = FileSystem.documentDirectory + fileName;
       await FileSystem.writeAsStringAsync(fileUri, xlsxContent, {
         encoding: FileSystem.EncodingType.UTF8
