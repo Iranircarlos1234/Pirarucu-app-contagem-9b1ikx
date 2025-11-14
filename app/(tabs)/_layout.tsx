@@ -68,6 +68,16 @@ export default function TabLayout() {
           headerTitle: 'Sincronizacao de Dados',
         }}
       />
+      <Tabs.Screen
+        name="assistant"
+        options={{
+          title: 'Assistente IA',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="psychology" size={size} color={color} />
+          ),
+          headerTitle: 'Assistente Tecnico IA',
+        }}
+      />
     </Tabs>
   );
 }
