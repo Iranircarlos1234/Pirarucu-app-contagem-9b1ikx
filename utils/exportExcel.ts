@@ -33,6 +33,20 @@ export interface ExcelRow {
   'TOTAL DE HORAS': string;
 }
 
+const EXCEL_HEADERS = [
+  'Data',
+  'CONTADOR',
+  'AMBIENTE',
+  'ORDEM DE CONTAGEM',
+  'Nº CONTAGEM',
+  'BODECOS',
+  'PIRARUCU',
+  'TOTAL GERAL',
+  'HORA INICIAL',
+  'HORA FINAL',
+  'TOTAL DE HORAS'
+];
+
 interface EnvironmentData {
   ambiente: string;
   sessions: CountSession[];
@@ -97,35 +111,57 @@ const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentData[]
   const environmentGroups: { [key: string]: CountSession[] } = {};
   
   sessions.forEach(session => {
-    if (!environmentGroups[session.ambiente]) {
-      environmentGroups[session.ambiente] = [];
+    const ambienteKey = session.ambiente || 'Ambiente Não Especificado';
+    if (!environmentGroups[ambienteKey]) {
+      environmentGroups[ambienteKey] = [];
     }
-    environmentGroups[session.ambiente].push(session);
+    environmentGroups[ambienteKey].push(session);
   });
   
   return Object.entries(environmentGroups).map(([ambiente, sessions]) => {
     const rows: ExcelRow[] = [];
-    const today = new Date().toLocaleDateString('pt-BR');
+    const today = new Date();
+    const dia = String(today.getDate()).padStart(2, '0');
+    const mes = String(today.getMonth() + 1).padStart(2, '0');
+    const ano = today.getFullYear();
+    const dataFormatada = `${dia}/${mes}/${ano}`;
     
     sessions.forEach((session, sessionIndex) => {
       const totalHoras = calculateHours(session.horaInicio, session.horaFinal);
       const ordemContagem = getOrdemContagem(sessionIndex + 1);
       
-      session.contagens.forEach(contagem => {
+      if (!session.contagens || session.contagens.length === 0) {
+        // Se não houver contagens individuais, criar uma linha com os totais
         rows.push({
-          'Data': today,
-          'CONTADOR': session.contador.toUpperCase(),
-          'AMBIENTE': session.ambiente.toUpperCase(),
+          'Data': dataFormatada,
+          'CONTADOR': (session.contador || 'Não informado').toUpperCase(),
+          'AMBIENTE': (session.ambiente || 'Não informado').toUpperCase(),
           'ORDEM DE CONTAGEM': ordemContagem,
-          'Nº CONTAGEM': contagem.numero,
-          'BODECOS': contagem.bodeco,
-          'PIRARUCU': contagem.pirarucu,
-          'TOTAL GERAL': contagem.pirarucu + contagem.bodeco,
-          'HORA INICIAL': session.horaInicio.split(' ')[0] || session.horaInicio,
-          'HORA FINAL': session.horaFinal.split(' ')[0] || session.horaFinal,
+          'Nº CONTAGEM': 1,
+          'BODECOS': session.totalBodeco || 0,
+          'PIRARUCU': session.totalPirarucu || 0,
+          'TOTAL GERAL': (session.totalPirarucu || 0) + (session.totalBodeco || 0),
+          'HORA INICIAL': session.horaInicio ? session.horaInicio.split(' ')[0] : '00:00',
+          'HORA FINAL': session.horaFinal ? session.horaFinal.split(' ')[0] : '00:00',
           'TOTAL DE HORAS': totalHoras
         });
-      });
+      } else {
+        session.contagens.forEach(contagem => {
+          rows.push({
+            'Data': dataFormatada,
+            'CONTADOR': (session.contador || 'Não informado').toUpperCase(),
+            'AMBIENTE': (session.ambiente || 'Não informado').toUpperCase(),
+            'ORDEM DE CONTAGEM': ordemContagem,
+            'Nº CONTAGEM': contagem.numero || 1,
+            'BODECOS': contagem.bodeco || 0,
+            'PIRARUCU': contagem.pirarucu || 0,
+            'TOTAL GERAL': (contagem.pirarucu || 0) + (contagem.bodeco || 0),
+            'HORA INICIAL': session.horaInicio ? session.horaInicio.split(' ')[0] : '00:00',
+            'HORA FINAL': session.horaFinal ? session.horaFinal.split(' ')[0] : '00:00',
+            'TOTAL DE HORAS': totalHoras
+          });
+        });
+      }
     });
     
     rows.sort((a, b) => {
@@ -152,127 +188,184 @@ const groupSessionsByEnvironment = (sessions: CountSession[]): EnvironmentData[]
 };
 
 export const generateXLSXContent = (sessions: CountSession[]): any => {
-  const environmentData = groupSessionsByEnvironment(sessions);
+  try {
+    if (!sessions || sessions.length === 0) {
+      throw new Error('Nenhuma sessão de contagem para exportar');
+    }
+
+    const environmentData = groupSessionsByEnvironment(sessions);
+    
+    // Criar workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // ABA 1: DADOS DETALHADOS
+    const allRows: any[] = [];
+    
+    environmentData.forEach(env => {
+      env.rows.forEach(row => {
+        allRows.push({
+          'Data': row.Data,
+          'CONTADOR': row.CONTADOR,
+          'AMBIENTE': row.AMBIENTE,
+          'ORDEM DE CONTAGEM': row['ORDEM DE CONTAGEM'],
+          'Nº CONTAGEM': row['Nº CONTAGEM'],
+          'BODECOS': row.BODECOS,
+          'PIRARUCU': row.PIRARUCU,
+          'TOTAL GERAL': row['TOTAL GERAL'],
+          'HORA INICIAL': row['HORA INICIAL'],
+          'HORA FINAL': row['HORA FINAL'],
+          'TOTAL DE HORAS': row['TOTAL DE HORAS']
+        });
+      });
+    });
+    
+    if (allRows.length === 0) {
+      throw new Error('Nenhum dado de contagem para exportar');
+    }
+    
+    const worksheet1 = XLSX.utils.json_to_sheet(allRows, {
+      header: EXCEL_HEADERS
+    });
   
-  // Criar workbook
-  const workbook = XLSX.utils.book_new();
+    // Definir largura das colunas
+    worksheet1['!cols'] = [
+      { wch: 12 },  // Data
+      { wch: 20 },  // CONTADOR
+      { wch: 20 },  // AMBIENTE
+      { wch: 18 },  // ORDEM DE CONTAGEM
+      { wch: 14 },  // Nº CONTAGEM
+      { wch: 10 },  // BODECOS
+      { wch: 10 },  // PIRARUCU
+      { wch: 12 },  // TOTAL GERAL
+      { wch: 14 },  // HORA INICIAL
+      { wch: 12 },  // HORA FINAL
+      { wch: 18 }   // TOTAL DE HORAS
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet1, 'CONTAGENS');
   
-  // ABA 1: DADOS DETALHADOS
-  const allRows: ExcelRow[] = [];
-  environmentData.forEach(env => {
-    allRows.push(...env.rows);
-  });
+    // ABA 2: RESUMO POR AMBIENTE
+    const resumoData = environmentData.map(env => ({
+      'AMBIENTE': env.ambiente.toUpperCase(),
+      'TOTAL BODECOS': env.totalBodecos,
+      'TOTAL PIRARUCUS': env.totalPirarucus,
+      'TOTAL GERAL': env.totalGeral,
+      'Nº CONTADORES': env.numeroContadores,
+      'Nº REGISTROS': env.rows.length
+    }));
   
-  const worksheet1 = XLSX.utils.json_to_sheet(allRows, {
-    header: ['Data', 'CONTADOR', 'AMBIENTE', 'ORDEM DE CONTAGEM', 'Nº CONTAGEM', 
-             'BODECOS', 'PIRARUCU', 'TOTAL GERAL', 'HORA INICIAL', 'HORA FINAL', 'TOTAL DE HORAS']
-  });
-  
-  // Definir largura das colunas
-  worksheet1['!cols'] = [
-    { wch: 12 },  // Data
-    { wch: 20 },  // CONTADOR
-    { wch: 20 },  // AMBIENTE
-    { wch: 18 },  // ORDEM DE CONTAGEM
-    { wch: 14 },  // Nº CONTAGEM
-    { wch: 10 },  // BODECOS
-    { wch: 10 },  // PIRARUCU
-    { wch: 12 },  // TOTAL GERAL
-    { wch: 14 },  // HORA INICIAL
-    { wch: 12 },  // HORA FINAL
-    { wch: 18 }   // TOTAL DE HORAS
-  ];
-  
-  XLSX.utils.book_append_sheet(workbook, worksheet1, 'CONTAGENS');
-  
-  // ABA 2: RESUMO POR AMBIENTE
-  const resumoData = environmentData.map(env => ({
-    'AMBIENTE': env.ambiente.toUpperCase(),
-    'TOTAL BODECOS': env.totalBodecos,
-    'TOTAL PIRARUCUS': env.totalPirarucus,
-    'TOTAL GERAL': env.totalGeral,
-    'Nº CONTADORES': env.numeroContadores,
-    'Nº REGISTROS': env.rows.length
-  }));
-  
-  // Adicionar linha de totais
-  const totalGeralBodecos = environmentData.reduce((sum, env) => sum + env.totalBodecos, 0);
-  const totalGeralPirarucus = environmentData.reduce((sum, env) => sum + env.totalPirarucus, 0);
-  const totalGeralContadores = environmentData.reduce((sum, env) => sum + env.numeroContadores, 0);
-  const totalRegistros = environmentData.reduce((sum, env) => sum + env.rows.length, 0);
-  
-  resumoData.push({
-    'AMBIENTE': '*** TOTAL GERAL ***',
-    'TOTAL BODECOS': totalGeralBodecos,
-    'TOTAL PIRARUCUS': totalGeralPirarucus,
-    'TOTAL GERAL': totalGeralBodecos + totalGeralPirarucus,
-    'Nº CONTADORES': totalGeralContadores,
-    'Nº REGISTROS': totalRegistros
-  });
-  
-  const worksheet2 = XLSX.utils.json_to_sheet(resumoData);
-  
-  // Definir largura das colunas do resumo
-  worksheet2['!cols'] = [
-    { wch: 25 },  // AMBIENTE
-    { wch: 15 },  // TOTAL BODECOS
-    { wch: 16 },  // TOTAL PIRARUCUS
-    { wch: 14 },  // TOTAL GERAL
-    { wch: 15 },  // Nº CONTADORES
-    { wch: 14 }   // Nº REGISTROS
-  ];
-  
-  XLSX.utils.book_append_sheet(workbook, worksheet2, 'RESUMO');
-  
-  return workbook;
+    // Adicionar linha de totais
+    const totalGeralBodecos = environmentData.reduce((sum, env) => sum + env.totalBodecos, 0);
+    const totalGeralPirarucus = environmentData.reduce((sum, env) => sum + env.totalPirarucus, 0);
+    const totalGeralContadores = environmentData.reduce((sum, env) => sum + env.numeroContadores, 0);
+    const totalRegistros = environmentData.reduce((sum, env) => sum + env.rows.length, 0);
+    
+    resumoData.push({
+      'AMBIENTE': '*** TOTAL GERAL ***',
+      'TOTAL BODECOS': totalGeralBodecos,
+      'TOTAL PIRARUCUS': totalGeralPirarucus,
+      'TOTAL GERAL': totalGeralBodecos + totalGeralPirarucus,
+      'Nº CONTADORES': totalGeralContadores,
+      'Nº REGISTROS': totalRegistros
+    });
+    
+    const worksheet2 = XLSX.utils.json_to_sheet(resumoData);
+    
+    // Definir largura das colunas do resumo
+    worksheet2['!cols'] = [
+      { wch: 25 },  // AMBIENTE
+      { wch: 15 },  // TOTAL BODECOS
+      { wch: 16 },  // TOTAL PIRARUCUS
+      { wch: 14 },  // TOTAL GERAL
+      { wch: 15 },  // Nº CONTADORES
+      { wch: 14 }   // Nº REGISTROS
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet2, 'RESUMO');
+    
+    return workbook;
+  } catch (error) {
+    console.error('Erro ao gerar conteúdo Excel:', error);
+    throw error;
+  }
 };
 
 export const exportToXLSX = async (sessions: CountSession[]): Promise<void> => {
   try {
-    if (sessions.length === 0) {
+    if (!sessions || sessions.length === 0) {
       throw new Error('Nenhum dado para exportar');
     }
 
+    console.log(`Iniciando exportação de ${sessions.length} sessões...`);
+    
     const workbook = generateXLSXContent(sessions);
-    const fileName = `Pirarucu_Contagem_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const hoje = new Date();
+    const dataArquivo = `${String(hoje.getDate()).padStart(2, '0')}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${hoje.getFullYear()}`;
+    const fileName = `Pirarucu_Contagem_${dataArquivo}.xlsx`;
     
     if (Platform.OS === 'web') {
-      // Gerar arquivo Excel para web
-      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      console.log('✅ Excel exportado com sucesso para web');
+      console.log('Gerando arquivo Excel para web...');
+      try {
+        const wbout = XLSX.write(workbook, { 
+          bookType: 'xlsx', 
+          type: 'array',
+          compression: true
+        });
+        const blob = new Blob([wbout], { 
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        }, 100);
+        
+        console.log('✅ Excel exportado com sucesso para web:', fileName);
+      } catch (webError) {
+        console.error('Erro na exportação web:', webError);
+        throw new Error('Falha ao gerar arquivo Excel para download');
+      }
     } else {
-      // Gerar arquivo Excel para mobile
-      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
-      const fileUri = FileSystem.documentDirectory + fileName;
-      
-      await FileSystem.writeAsStringAsync(fileUri, wbout, {
-        encoding: FileSystem.EncodingType.Base64
-      });
-      
-      const { Share } = require('react-native');
-      await Share.share({
-        title: 'Relatório Contagem Pirarucu',
-        message: 'Planilha Excel com dados de contagem separados por abas',
-        url: fileUri,
-      });
-      
-      console.log('✅ Excel exportado com sucesso para mobile');
+      console.log('Gerando arquivo Excel para mobile...');
+      try {
+        const wbout = XLSX.write(workbook, { 
+          bookType: 'xlsx', 
+          type: 'base64',
+          compression: true
+        });
+        const fileUri = FileSystem.documentDirectory + fileName;
+        
+        await FileSystem.writeAsStringAsync(fileUri, wbout, {
+          encoding: FileSystem.EncodingType.Base64
+        });
+        
+        console.log('Arquivo salvo em:', fileUri);
+        
+        const { Share } = require('react-native');
+        await Share.share({
+          title: 'Relatório Contagem Pirarucu',
+          message: 'Planilha Excel com dados de contagem separados por abas',
+          url: fileUri,
+        });
+        
+        console.log('✅ Excel exportado com sucesso para mobile:', fileName);
+      } catch (mobileError) {
+        console.error('Erro na exportação mobile:', mobileError);
+        throw new Error('Falha ao gerar arquivo Excel para compartilhamento');
+      }
     }
   } catch (error) {
-    console.log('❌ Erro na exportação XLSX:', error);
-    throw error;
+    console.error('❌ Erro na exportação XLSX:', error);
+    if (error instanceof Error) {
+      throw new Error(`Falha na exportação: ${error.message}`);
+    }
+    throw new Error('Falha desconhecida na exportação Excel');
   }
 };
 
