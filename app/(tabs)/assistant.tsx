@@ -33,7 +33,7 @@ export default function AssistantScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Ola! Sou seu assistente tecnico especializado em contagem de pirarucu. Posso ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Interpretacao de dados\n• Boas praticas de manejo\n• Legislacao ambiental\n• Analise de relatorios\n\nComo posso ajudar voce hoje?',
+      text: 'Ola! Meu nome e JORGE TAPIOCA, seu assistente tecnico especializado em contagem de pirarucu. Posso ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Interpretacao de dados\n• Boas praticas de manejo\n• Legislacao ambiental\n• Analise de relatorios\n\nComo posso ajudar voce hoje?',
       sender: 'assistant',
       timestamp: new Date(),
     },
@@ -246,7 +246,7 @@ export default function AssistantScreen() {
     }
 
     if (lowerQuestion.includes('ola') || lowerQuestion.includes('oi') || lowerQuestion.includes('ajuda')) {
-      return 'Ola! Estou aqui para ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Uso do aplicativo\n• Sincronizacao de dados\n• Exportacao de relatorios\n• Analise de dados\n\nFaca sua pergunta especifica e terei prazer em ajudar!';
+      return 'Ola! Sou JORGE TAPIOCA, estou aqui para ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Uso do aplicativo\n• Sincronizacao de dados\n• Exportacao de relatorios\n• Analise de dados\n\nFaca sua pergunta especifica e terei prazer em ajudar!';
     }
 
     return 'Entendo sua pergunta sobre "' + question + '".\n\nPara respostas mais precisas e contextualizadas, conecte o servico de IA do OnSpace atraves do Supabase.\n\nEnquanto isso, tente perguntar sobre:\n• Procedimentos de contagem\n• Uso de funcionalidades do app\n• Sincronizacao de dispositivos\n• Exportacao de relatorios';
@@ -267,7 +267,7 @@ export default function AssistantScreen() {
     setMessages([
       {
         id: '1',
-        text: 'Chat limpo. Como posso ajudar voce agora?',
+        text: 'Chat limpo. Sou JORGE TAPIOCA, como posso ajudar voce agora?',
         sender: 'assistant',
         timestamp: new Date(),
       },
