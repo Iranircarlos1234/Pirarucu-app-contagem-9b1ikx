@@ -51,6 +51,10 @@ export default function AssistantScreen() {
     title: '',
     content: '',
   });
+  const [feedbackMessage, setFeedbackMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     scrollToBottom();
@@ -70,71 +74,132 @@ export default function AssistantScreen() {
     try {
       const stored = await AsyncStorage.getItem('pirarucu_knowledge');
       if (stored) {
-        setKnowledgeBase(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        setKnowledgeBase(parsed);
+        console.log('✅ Base de conhecimento carregada:', parsed.length, 'itens');
+      } else {
+        console.log('ℹ️ Nenhuma base de conhecimento encontrada');
       }
     } catch (error) {
-      console.log('Erro ao carregar base de conhecimento');
+      console.error('❌ Erro ao carregar base de conhecimento:', error);
+      setKnowledgeBase([]);
     }
   };
 
   const saveKnowledgeBase = async (knowledge: KnowledgeItem[]) => {
     try {
-      await AsyncStorage.setItem('pirarucu_knowledge', JSON.stringify(knowledge));
+      const jsonData = JSON.stringify(knowledge);
+      await AsyncStorage.setItem('pirarucu_knowledge', jsonData);
       setKnowledgeBase(knowledge);
+      console.log('✅ Base de conhecimento salva:', knowledge.length, 'itens');
     } catch (error) {
-      console.log('Erro ao salvar base de conhecimento');
+      console.error('❌ Erro ao salvar base de conhecimento:', error);
+      throw error;
     }
+  };
+
+  const showFeedback = (type: 'success' | 'error', text: string) => {
+    setFeedbackMessage({ type, text });
+    setTimeout(() => setFeedbackMessage(null), 3000);
   };
 
   const addKnowledge = async () => {
-    if (!newKnowledge.title.trim() || !newKnowledge.content.trim()) {
-      console.log('Preencha titulo e conteudo');
+    if (!newKnowledge.title.trim()) {
+      showFeedback('error', '❌ Preencha o titulo do conhecimento');
+      return;
+    }
+    
+    if (!newKnowledge.content.trim()) {
+      showFeedback('error', '❌ Preencha o conteudo do conhecimento');
       return;
     }
 
-    const item: KnowledgeItem = {
-      id: Date.now().toString(),
-      category: newKnowledge.category,
-      title: newKnowledge.title,
-      content: newKnowledge.content,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const item: KnowledgeItem = {
+        id: Date.now().toString(),
+        category: newKnowledge.category,
+        title: newKnowledge.title.trim(),
+        content: newKnowledge.content.trim(),
+        createdAt: new Date().toISOString(),
+      };
 
-    const updated = [...knowledgeBase, item];
-    await saveKnowledgeBase(updated);
-    
-    setNewKnowledge({
-      category: 'empirico',
-      title: '',
-      content: '',
-    });
-    setShowKnowledgeModal(false);
+      const updated = [...knowledgeBase, item];
+      await saveKnowledgeBase(updated);
+      
+      showFeedback('success', '✅ Conhecimento salvo com sucesso!');
+      
+      setNewKnowledge({
+        category: 'empirico',
+        title: '',
+        content: '',
+      });
+      
+      setTimeout(() => {
+        setShowKnowledgeModal(false);
+      }, 1500);
+    } catch (error) {
+      console.error('Erro ao salvar conhecimento:', error);
+      showFeedback('error', '❌ Erro ao salvar. Tente novamente.');
+    }
   };
 
   const updateKnowledge = async () => {
-    if (!editingKnowledge || !newKnowledge.title.trim() || !newKnowledge.content.trim()) {
+    if (!editingKnowledge) {
+      showFeedback('error', '❌ Nenhum conhecimento selecionado para edicao');
+      return;
+    }
+    
+    if (!newKnowledge.title.trim()) {
+      showFeedback('error', '❌ Preencha o titulo do conhecimento');
+      return;
+    }
+    
+    if (!newKnowledge.content.trim()) {
+      showFeedback('error', '❌ Preencha o conteudo do conhecimento');
       return;
     }
 
-    const updated = knowledgeBase.map(item => 
-      item.id === editingKnowledge.id 
-        ? { ...item, ...newKnowledge }
-        : item
-    );
-    
-    await saveKnowledgeBase(updated);
-    setEditingKnowledge(null);
-    setNewKnowledge({
-      category: 'empirico',
-      title: '',
-      content: '',
-    });
-    setShowKnowledgeModal(false);
+    try {
+      const updated = knowledgeBase.map(item => 
+        item.id === editingKnowledge.id 
+          ? { 
+              ...item, 
+              category: newKnowledge.category,
+              title: newKnowledge.title.trim(),
+              content: newKnowledge.content.trim()
+            }
+          : item
+      );
+      
+      await saveKnowledgeBase(updated);
+      
+      showFeedback('success', '✅ Conhecimento atualizado com sucesso!');
+      
+      setEditingKnowledge(null);
+      setNewKnowledge({
+        category: 'empirico',
+        title: '',
+        content: '',
+      });
+      
+      setTimeout(() => {
+        setShowKnowledgeModal(false);
+      }, 1500);
+    } catch (error) {
+      console.error('Erro ao atualizar conhecimento:', error);
+      showFeedback('error', '❌ Erro ao atualizar. Tente novamente.');
+    }
   };
 
   const deleteKnowledge = async (id: string) => {
-    const updated = knowledgeBase.filter(item => item.id !== id);
-    await saveKnowledgeBase(updated);
+    try {
+      const updated = knowledgeBase.filter(item => item.id !== id);
+      await saveKnowledgeBase(updated);
+      showFeedback('success', '✅ Conhecimento excluido com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir conhecimento:', error);
+      showFeedback('error', '❌ Erro ao excluir. Tente novamente.');
+    }
   };
 
   const startEditKnowledge = (item: KnowledgeItem) => {
@@ -457,10 +522,20 @@ export default function AssistantScreen() {
               setShowKnowledgeModal(false);
               setEditingKnowledge(null);
               setNewKnowledge({ category: 'empirico', title: '', content: '' });
+              setFeedbackMessage(null);
             }}>
               <MaterialIcons name="close" size={28} color="#6B7280" />
             </TouchableOpacity>
           </View>
+
+          {feedbackMessage && (
+            <View style={[
+              styles.feedbackBanner,
+              feedbackMessage.type === 'success' ? styles.feedbackSuccess : styles.feedbackError
+            ]}>
+              <Text style={styles.feedbackText}>{feedbackMessage.text}</Text>
+            </View>
+          )}
 
           <ScrollView style={styles.modalContent}>
             {!editingKnowledge && (
@@ -1009,5 +1084,29 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 14,
     fontWeight: '600',
+  },
+  feedbackBanner: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  feedbackSuccess: {
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  feedbackError: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+  },
+  feedbackText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
   },
 });
