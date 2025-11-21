@@ -37,7 +37,7 @@ export default function AssistantScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Ola! Meu nome e JORGE TAPIOCA, seu assistente tecnico especializado em contagem de pirarucu.\n\n🤖 Assistente 100% OFFLINE\n\nPosso ajudar com duvidas sobre:\n• Procedimentos de contagem\n• Interpretacao de dados\n• Boas praticas de manejo\n• Legislacao ambiental\n• Analise de relatorios\n\nMinhas respostas sao baseadas na base de conhecimento armazenada localmente.\n\nComo posso ajudar voce hoje?',
+      text: 'Ola! Meu nome e Tapioca, seu assistente tecnico especializado em contagem de pirarucu.\n\n🤖 Assistente 100% OFFLINE\n\nPosso ajudar com duvidas sobre:\n• Procedimentos de contagem\n• Interpretacao de dados\n• Boas praticas de manejo\n• Legislacao ambiental\n• Analise de relatorios\n\nMinhas respostas sao baseadas na base de conhecimento armazenada localmente.\n\nComo posso ajudar voce hoje?',
       sender: 'assistant',
       timestamp: new Date(),
     },
@@ -501,7 +501,7 @@ export default function AssistantScreen() {
     }
 
     if (lowerQuestion.includes('ola') || lowerQuestion.includes('oi') || lowerQuestion.includes('ajuda')) {
-      return 'Ola! Sou JORGE TAPIOCA, estou aqui para ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Uso do aplicativo\n• Sincronizacao de dados\n• Exportacao de relatorios\n• Analise de dados\n\nFaca sua pergunta especifica e terei prazer em ajudar!';
+      return 'Ola! Sou Tapioca, estou aqui para ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Uso do aplicativo\n• Sincronizacao de dados\n• Exportacao de relatorios\n• Analise de dados\n\nFaca sua pergunta especifica e terei prazer em ajudar!';
     }
 
     return 'Entendo sua pergunta sobre "' + question + '".\n\n🤖 Sou um assistente offline baseado em conhecimento local.\n\nTente perguntar sobre:\n• Procedimentos de contagem\n• Uso de funcionalidades do app\n• Sincronizacao de dispositivos\n• Exportacao de relatorios\n\nDica: Adicione mais conhecimentos na "Base de Conhecimento" para enriquecer minhas respostas!';
@@ -523,7 +523,7 @@ export default function AssistantScreen() {
     setMessages([
       {
         id: '1',
-        text: 'Chat limpo. Sou JORGE TAPIOCA, seu assistente offline. Como posso ajudar voce agora?',
+        text: 'Chat limpo. Sou Tapioca, seu assistente offline. Como posso ajudar voce agora?',
         sender: 'assistant',
         timestamp: new Date(),
       },
