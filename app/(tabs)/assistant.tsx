@@ -9,10 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
 
 interface Message {
   id: string;
@@ -55,6 +58,8 @@ export default function AssistantScreen() {
     type: 'success' | 'error';
     text: string;
   } | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncStats, setSyncStats] = useState({ exported: 0, imported: 0 });
 
   useEffect(() => {
     scrollToBottom();
@@ -101,6 +106,147 @@ export default function AssistantScreen() {
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setFeedbackMessage({ type, text });
     setTimeout(() => setFeedbackMessage(null), 3000);
+  };
+
+  const exportKnowledgeBase = async () => {
+    try {
+      if (knowledgeBase.length === 0) {
+        showFeedback('error', '❌ Nenhum conhecimento para exportar');
+        return;
+      }
+
+      const exportData = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        totalItems: knowledgeBase.length,
+        knowledge: knowledgeBase
+      };
+
+      const jsonData = JSON.stringify(exportData, null, 2);
+      const hoje = new Date();
+      const dataArquivo = `${String(hoje.getDate()).padStart(2, '0')}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${hoje.getFullYear()}`;
+      const fileName = `Pirarucu_Conhecimento_${dataArquivo}.json`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        showFeedback('success', `✅ ${knowledgeBase.length} itens exportados com sucesso!`);
+      } else {
+        const fileUri = FileSystem.documentDirectory + fileName;
+        await FileSystem.writeAsStringAsync(fileUri, jsonData, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+
+        await Share.share({
+          title: 'Base de Conhecimento Pirarucu',
+          message: `Exportacao de ${knowledgeBase.length} itens de conhecimento`,
+          url: fileUri,
+        });
+
+        setSyncStats(prev => ({ ...prev, exported: knowledgeBase.length }));
+        showFeedback('success', `✅ ${knowledgeBase.length} itens exportados!`);
+      }
+    } catch (error) {
+      console.error('Erro ao exportar base de conhecimento:', error);
+      showFeedback('error', '❌ Erro ao exportar. Tente novamente.');
+    }
+  };
+
+  const importKnowledgeBase = async () => {
+    try {
+      let fileContent: string = '';
+
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = async (e: any) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = async (event: any) => {
+            try {
+              const content = event.target.result;
+              await processImportedData(content);
+            } catch (error) {
+              showFeedback('error', '❌ Arquivo invalido');
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      } else {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: 'application/json',
+          copyToCacheDirectory: true
+        });
+
+        if (result.canceled) {
+          return;
+        }
+
+        const asset = result.assets[0];
+        fileContent = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+
+        await processImportedData(fileContent);
+      }
+    } catch (error) {
+      console.error('Erro ao importar base de conhecimento:', error);
+      showFeedback('error', '❌ Erro ao importar. Verifique o arquivo.');
+    }
+  };
+
+  const processImportedData = async (content: string) => {
+    try {
+      const importedData = JSON.parse(content);
+      
+      if (!importedData.knowledge || !Array.isArray(importedData.knowledge)) {
+        showFeedback('error', '❌ Formato de arquivo invalido');
+        return;
+      }
+
+      const validItems = importedData.knowledge.filter((item: any) => 
+        item.id && item.category && item.title && item.content
+      );
+
+      if (validItems.length === 0) {
+        showFeedback('error', '❌ Nenhum item valido encontrado');
+        return;
+      }
+
+      // Mesclar com dados existentes (evitar duplicatas por ID)
+      const existingIds = new Set(knowledgeBase.map(k => k.id));
+      const newItems = validItems.filter((item: KnowledgeItem) => !existingIds.has(item.id));
+      
+      const mergedKnowledge = [...knowledgeBase, ...newItems];
+      await saveKnowledgeBase(mergedKnowledge);
+
+      setSyncStats(prev => ({ ...prev, imported: newItems.length }));
+      showFeedback('success', `✅ ${newItems.length} novos itens importados!`);
+      
+      if (newItems.length < validItems.length) {
+        setTimeout(() => {
+          showFeedback('success', `ℹ️ ${validItems.length - newItems.length} itens ja existiam`);
+        }, 3500);
+      }
+    } catch (error) {
+      console.error('Erro ao processar dados importados:', error);
+      showFeedback('error', '❌ Erro ao processar arquivo JSON');
+    }
+  };
+
+  const syncWithDevice = () => {
+    setShowSyncModal(true);
   };
 
   const addKnowledge = async () => {
@@ -373,6 +519,12 @@ export default function AssistantScreen() {
             <Text style={styles.knowledgeButtonText}>
               Base de Conhecimento ({knowledgeBase.length})
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.syncButton}
+            onPress={syncWithDevice}
+          >
+            <MaterialIcons name="sync" size={24} color="#059669" />
           </TouchableOpacity>
         </View>
 
@@ -656,6 +808,96 @@ export default function AssistantScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      <Modal visible={showSyncModal} animationType="slide" transparent>
+        <View style={styles.syncModalOverlay}>
+          <View style={styles.syncModalContent}>
+            <View style={styles.syncModalHeader}>
+              <Text style={styles.syncModalTitle}>Sincronizar Conhecimento</Text>
+              <TouchableOpacity onPress={() => setShowSyncModal(false)}>
+                <MaterialIcons name="close" size={28} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.syncInfo}>
+              <View style={styles.syncInfoCard}>
+                <MaterialIcons name="storage" size={32} color="#2563EB" />
+                <Text style={styles.syncInfoNumber}>{knowledgeBase.length}</Text>
+                <Text style={styles.syncInfoLabel}>Itens Armazenados</Text>
+              </View>
+              <View style={styles.syncInfoCard}>
+                <MaterialIcons name="cloud-upload" size={32} color="#059669" />
+                <Text style={styles.syncInfoNumber}>{syncStats.exported}</Text>
+                <Text style={styles.syncInfoLabel}>Exportados</Text>
+              </View>
+              <View style={styles.syncInfoCard}>
+                <MaterialIcons name="cloud-download" size={32} color="#F59E0B" />
+                <Text style={styles.syncInfoNumber}>{syncStats.imported}</Text>
+                <Text style={styles.syncInfoLabel}>Importados</Text>
+              </View>
+            </View>
+
+            <View style={styles.syncInstructions}>
+              <Text style={styles.syncInstructionsTitle}>Como Sincronizar:</Text>
+              <View style={styles.syncStep}>
+                <View style={styles.syncStepNumber}>
+                  <Text style={styles.syncStepNumberText}>1</Text>
+                </View>
+                <Text style={styles.syncStepText}>
+                  Exporte a base de conhecimento do dispositivo de origem (PC ou telefone)
+                </Text>
+              </View>
+              <View style={styles.syncStep}>
+                <View style={styles.syncStepNumber}>
+                  <Text style={styles.syncStepNumberText}>2</Text>
+                </View>
+                <Text style={styles.syncStepText}>
+                  Transfira o arquivo JSON para o dispositivo de destino (email, nuvem, etc)
+                </Text>
+              </View>
+              <View style={styles.syncStep}>
+                <View style={styles.syncStepNumber}>
+                  <Text style={styles.syncStepNumberText}>3</Text>
+                </View>
+                <Text style={styles.syncStepText}>
+                  Importe o arquivo no dispositivo de destino - dados serao mesclados
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.syncActions}>
+              <TouchableOpacity
+                style={styles.exportButton}
+                onPress={() => {
+                  setShowSyncModal(false);
+                  setTimeout(() => exportKnowledgeBase(), 500);
+                }}
+              >
+                <MaterialIcons name="upload" size={24} color="white" />
+                <Text style={styles.syncActionText}>Exportar Conhecimento</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.importButton}
+                onPress={() => {
+                  setShowSyncModal(false);
+                  setTimeout(() => importKnowledgeBase(), 500);
+                }}
+              >
+                <MaterialIcons name="download" size={24} color="white" />
+                <Text style={styles.syncActionText}>Importar Conhecimento</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.syncNote}>
+              <MaterialIcons name="info" size={20} color="#2563EB" />
+              <Text style={styles.syncNoteText}>
+                Os dados funcionam 100% offline. A sincronizacao e manual via arquivo JSON.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -669,13 +911,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
+    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    gap: 12,
   },
   knowledgeButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EFF6FF',
@@ -684,6 +929,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#DBEAFE',
+  },
+  syncButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
   },
   knowledgeButtonText: {
     color: '#2563EB',
@@ -1108,5 +1363,129 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  syncModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  syncModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+  },
+  syncModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  syncModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  syncInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 20,
+    backgroundColor: '#F8FAFC',
+  },
+  syncInfoCard: {
+    alignItems: 'center',
+  },
+  syncInfoNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 8,
+  },
+  syncInfoLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  syncInstructions: {
+    padding: 20,
+  },
+  syncInstructionsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  syncStep: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  syncStepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  syncStepNumberText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  syncStepText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  syncActions: {
+    padding: 20,
+    gap: 12,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    borderRadius: 8,
+    gap: 8,
+  },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563EB',
+    paddingVertical: 14,
+    borderRadius: 8,
+    gap: 8,
+  },
+  syncActionText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  syncNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    margin: 16,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    gap: 8,
+  },
+  syncNoteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1E40AF',
+    lineHeight: 18,
   },
 });
