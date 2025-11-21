@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Speech from 'expo-speech';
 
 interface Message {
   id: string;
@@ -65,6 +66,8 @@ export default function AssistantScreen() {
     lastUpdate: string | null;
     dataSize: string;
   }>({ totalItems: 0, lastUpdate: null, dataSize: '0 KB' });
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
     scrollToBottom();
@@ -516,6 +519,7 @@ export default function AssistantScreen() {
   };
 
   const clearChat = () => {
+    stopSpeaking();
     setMessages([
       {
         id: '1',
@@ -525,6 +529,65 @@ export default function AssistantScreen() {
       },
     ]);
   };
+
+  const speakMessage = async (messageId: string, text: string) => {
+    try {
+      // Se já está falando esta mensagem, parar
+      if (speakingMessageId === messageId && isSpeaking) {
+        stopSpeaking();
+        return;
+      }
+
+      // Se está falando outra mensagem, parar primeiro
+      if (isSpeaking) {
+        await Speech.stop();
+      }
+
+      setSpeakingMessageId(messageId);
+      setIsSpeaking(true);
+
+      await Speech.speak(text, {
+        language: 'pt-BR',
+        pitch: 1.0,
+        rate: 0.85,
+        onDone: () => {
+          setIsSpeaking(false);
+          setSpeakingMessageId(null);
+        },
+        onStopped: () => {
+          setIsSpeaking(false);
+          setSpeakingMessageId(null);
+        },
+        onError: () => {
+          setIsSpeaking(false);
+          setSpeakingMessageId(null);
+          showFeedback('error', '❌ Erro ao reproduzir áudio');
+        },
+      });
+    } catch (error) {
+      console.error('Erro ao falar mensagem:', error);
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+      showFeedback('error', '❌ Erro ao ativar leitura de voz');
+    }
+  };
+
+  const stopSpeaking = async () => {
+    try {
+      await Speech.stop();
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+    } catch (error) {
+      console.error('Erro ao parar fala:', error);
+    }
+  };
+
+  useEffect(() => {
+    // Limpar fala quando sair da tela
+    return () => {
+      Speech.stop();
+    };
+  }, []);
 
   const getCategoryIcon = (category: KnowledgeItem['category']) => {
     switch (category) {
@@ -615,19 +678,33 @@ export default function AssistantScreen() {
                 >
                   {message.text}
                 </Text>
-                <Text
-                  style={[
-                    styles.timestamp,
-                    message.sender === 'user'
-                      ? styles.userTimestamp
-                      : styles.assistantTimestamp,
-                  ]}
-                >
-                  {message.timestamp.toLocaleTimeString('pt-BR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
+                <View style={styles.messageFooter}>
+                  <Text
+                    style={[
+                      styles.timestamp,
+                      message.sender === 'user'
+                        ? styles.userTimestamp
+                        : styles.assistantTimestamp,
+                    ]}
+                  >
+                    {message.timestamp.toLocaleTimeString('pt-BR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                  {message.sender === 'assistant' && (
+                    <TouchableOpacity
+                      style={styles.speakButton}
+                      onPress={() => speakMessage(message.id, message.text)}
+                    >
+                      <MaterialIcons
+                        name={speakingMessageId === message.id && isSpeaking ? 'stop' : 'volume-up'}
+                        size={18}
+                        color={speakingMessageId === message.id && isSpeaking ? '#DC2626' : '#6B7280'}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
               {message.sender === 'user' && (
                 <View style={styles.userIcon}>
@@ -680,11 +757,18 @@ export default function AssistantScreen() {
               multiline
               maxLength={500}
             />
-            {messages.length > 1 && (
-              <TouchableOpacity style={styles.clearButton} onPress={clearChat}>
-                <MaterialIcons name="delete-outline" size={20} color="#6B7280" />
-              </TouchableOpacity>
-            )}
+            <View style={styles.inputActions}>
+              {isSpeaking && (
+                <TouchableOpacity style={styles.stopSpeakButton} onPress={stopSpeaking}>
+                  <MaterialIcons name="stop-circle" size={20} color="#DC2626" />
+                </TouchableOpacity>
+              )}
+              {messages.length > 1 && (
+                <TouchableOpacity style={styles.clearButton} onPress={clearChat}>
+                  <MaterialIcons name="delete-outline" size={20} color="#6B7280" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           <TouchableOpacity
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
@@ -1087,9 +1171,14 @@ const styles = StyleSheet.create({
   assistantMessageText: {
     color: '#1F2937',
   },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   timestamp: {
     fontSize: 11,
-    marginTop: 4,
   },
   userTimestamp: {
     color: 'rgba(255,255,255,0.8)',
@@ -1097,6 +1186,10 @@ const styles = StyleSheet.create({
   },
   assistantTimestamp: {
     color: '#9CA3AF',
+  },
+  speakButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -1186,9 +1279,16 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingVertical: 4,
   },
+  inputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stopSpeakButton: {
+    padding: 4,
+  },
   clearButton: {
     padding: 4,
-    marginLeft: 4,
   },
   sendButton: {
     width: 48,
