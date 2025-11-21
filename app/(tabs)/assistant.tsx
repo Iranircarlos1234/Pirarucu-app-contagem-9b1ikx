@@ -60,6 +60,12 @@ export default function AssistantScreen() {
   } | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncStats, setSyncStats] = useState({ exported: 0, imported: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<{
+    totalItems: number;
+    lastUpdate: string | null;
+    dataSize: string;
+  }>({ totalItems: 0, lastUpdate: null, dataSize: '0 KB' });
 
   useEffect(() => {
     scrollToBottom();
@@ -75,19 +81,50 @@ export default function AssistantScreen() {
     }, 100);
   };
 
-  const loadKnowledgeBase = async () => {
+  const loadKnowledgeBase = async (showFeedbackOnLoad = false) => {
     try {
+      setIsRefreshing(true);
       const stored = await AsyncStorage.getItem('pirarucu_knowledge');
+      
       if (stored) {
         const parsed = JSON.parse(stored);
         setKnowledgeBase(parsed);
+        
+        // Calcular informações de armazenamento
+        const dataSize = (new Blob([stored]).size / 1024).toFixed(2);
+        const dates = parsed.map((item: KnowledgeItem) => new Date(item.createdAt).getTime());
+        const lastUpdate = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleString('pt-BR') : null;
+        
+        setStorageInfo({
+          totalItems: parsed.length,
+          lastUpdate,
+          dataSize: `${dataSize} KB`
+        });
+        
         console.log('✅ Base de conhecimento carregada:', parsed.length, 'itens');
+        
+        if (showFeedbackOnLoad) {
+          showFeedback('success', `✅ ${parsed.length} conhecimentos carregados do armazenamento`);
+        }
       } else {
         console.log('ℹ️ Nenhuma base de conhecimento encontrada');
+        setKnowledgeBase([]);
+        setStorageInfo({ totalItems: 0, lastUpdate: null, dataSize: '0 KB' });
+        
+        if (showFeedbackOnLoad) {
+          showFeedback('error', 'ℹ️ Nenhum conhecimento armazenado encontrado');
+        }
       }
     } catch (error) {
       console.error('❌ Erro ao carregar base de conhecimento:', error);
       setKnowledgeBase([]);
+      setStorageInfo({ totalItems: 0, lastUpdate: null, dataSize: '0 KB' });
+      
+      if (showFeedbackOnLoad) {
+        showFeedback('error', '❌ Erro ao carregar dados do armazenamento');
+      }
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -96,6 +133,18 @@ export default function AssistantScreen() {
       const jsonData = JSON.stringify(knowledge);
       await AsyncStorage.setItem('pirarucu_knowledge', jsonData);
       setKnowledgeBase(knowledge);
+      
+      // Atualizar informações de armazenamento
+      const dataSize = (new Blob([jsonData]).size / 1024).toFixed(2);
+      const dates = knowledge.map(item => new Date(item.createdAt).getTime());
+      const lastUpdate = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleString('pt-BR') : null;
+      
+      setStorageInfo({
+        totalItems: knowledge.length,
+        lastUpdate,
+        dataSize: `${dataSize} KB`
+      });
+      
       console.log('✅ Base de conhecimento salva:', knowledge.length, 'itens');
     } catch (error) {
       console.error('❌ Erro ao salvar base de conhecimento:', error);
@@ -245,8 +294,14 @@ export default function AssistantScreen() {
     }
   };
 
-  const syncWithDevice = () => {
+  const syncWithDevice = async () => {
+    // Recarregar dados do AsyncStorage antes de abrir modal
+    await loadKnowledgeBase(false);
     setShowSyncModal(true);
+  };
+
+  const forceReloadKnowledge = async () => {
+    await loadKnowledgeBase(true);
   };
 
   const addKnowledge = async () => {
@@ -822,7 +877,7 @@ export default function AssistantScreen() {
             <View style={styles.syncInfo}>
               <View style={styles.syncInfoCard}>
                 <MaterialIcons name="storage" size={32} color="#2563EB" />
-                <Text style={styles.syncInfoNumber}>{knowledgeBase.length}</Text>
+                <Text style={styles.syncInfoNumber}>{storageInfo.totalItems}</Text>
                 <Text style={styles.syncInfoLabel}>Itens Armazenados</Text>
               </View>
               <View style={styles.syncInfoCard}>
@@ -835,6 +890,35 @@ export default function AssistantScreen() {
                 <Text style={styles.syncInfoNumber}>{syncStats.imported}</Text>
                 <Text style={styles.syncInfoLabel}>Importados</Text>
               </View>
+            </View>
+
+            <View style={styles.storageDetails}>
+              <View style={styles.storageDetailRow}>
+                <MaterialIcons name="access-time" size={20} color="#6B7280" />
+                <Text style={styles.storageDetailLabel}>Ultima atualizacao:</Text>
+                <Text style={styles.storageDetailValue}>
+                  {storageInfo.lastUpdate || 'Nunca'}
+                </Text>
+              </View>
+              <View style={styles.storageDetailRow}>
+                <MaterialIcons name="data-usage" size={20} color="#6B7280" />
+                <Text style={styles.storageDetailLabel}>Tamanho dos dados:</Text>
+                <Text style={styles.storageDetailValue}>{storageInfo.dataSize}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.reloadButton}
+                onPress={forceReloadKnowledge}
+                disabled={isRefreshing}
+              >
+                <MaterialIcons 
+                  name="refresh" 
+                  size={20} 
+                  color={isRefreshing ? "#9CA3AF" : "#2563EB"} 
+                />
+                <Text style={[styles.reloadButtonText, isRefreshing && styles.reloadButtonTextDisabled]}>
+                  {isRefreshing ? 'Recarregando...' : 'Recarregar Armazenamento'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.syncInstructions}>
@@ -1487,5 +1571,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1E40AF',
     lineHeight: 18,
+  },
+  storageDetails: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  storageDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  storageDetailLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  storageDetailValue: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1F2937',
+    textAlign: 'right',
+  },
+  reloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 4,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  reloadButtonText: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  reloadButtonTextDisabled: {
+    color: '#9CA3AF',
   },
 });
