@@ -36,14 +36,13 @@ export default function AssistantScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Ola! Meu nome e JORGE TAPIOCA, seu assistente tecnico especializado em contagem de pirarucu. Posso ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Interpretacao de dados\n• Boas praticas de manejo\n• Legislacao ambiental\n• Analise de relatorios\n\nComo posso ajudar voce hoje?',
+      text: 'Ola! Meu nome e JORGE TAPIOCA, seu assistente tecnico especializado em contagem de pirarucu.\n\n🤖 Assistente 100% OFFLINE\n\nPosso ajudar com duvidas sobre:\n• Procedimentos de contagem\n• Interpretacao de dados\n• Boas praticas de manejo\n• Legislacao ambiental\n• Analise de relatorios\n\nMinhas respostas sao baseadas na base de conhecimento armazenada localmente.\n\nComo posso ajudar voce hoje?',
       sender: 'assistant',
       timestamp: new Date(),
     },
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [supabaseConnected, setSupabaseConnected] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeItem[]>([]);
@@ -427,22 +426,9 @@ export default function AssistantScreen() {
     setInputText('');
     setIsTyping(true);
 
-    if (!supabaseConnected) {
-      setTimeout(() => {
-        const warningMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: '⚠️ Servico de IA nao conectado.\n\nPara ativar o assistente inteligente:\n1. Clique no icone de conexao no canto superior direito\n2. Conecte seu projeto Supabase\n3. O assistente IA sera ativado automaticamente\n\nEnquanto isso, posso fornecer respostas basicas sobre contagem de pirarucu.',
-          sender: 'assistant',
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, warningMessage]);
-        setIsTyping(false);
-      }, 1000);
-      return;
-    }
-
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Simular tempo de processamento
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -515,7 +501,7 @@ export default function AssistantScreen() {
       return 'Ola! Sou JORGE TAPIOCA, estou aqui para ajudar com duvidas sobre:\n\n• Procedimentos de contagem\n• Uso do aplicativo\n• Sincronizacao de dados\n• Exportacao de relatorios\n• Analise de dados\n\nFaca sua pergunta especifica e terei prazer em ajudar!';
     }
 
-    return 'Entendo sua pergunta sobre "' + question + '".\n\nPara respostas mais precisas e contextualizadas, conecte o servico de IA do OnSpace atraves do Supabase.\n\nEnquanto isso, tente perguntar sobre:\n• Procedimentos de contagem\n• Uso de funcionalidades do app\n• Sincronizacao de dispositivos\n• Exportacao de relatorios';
+    return 'Entendo sua pergunta sobre "' + question + '".\n\n🤖 Sou um assistente offline baseado em conhecimento local.\n\nTente perguntar sobre:\n• Procedimentos de contagem\n• Uso de funcionalidades do app\n• Sincronizacao de dispositivos\n• Exportacao de relatorios\n\nDica: Adicione mais conhecimentos na "Base de Conhecimento" para enriquecer minhas respostas!';
   };
 
   const suggestedQuestions = [
@@ -533,7 +519,7 @@ export default function AssistantScreen() {
     setMessages([
       {
         id: '1',
-        text: 'Chat limpo. Sou JORGE TAPIOCA, como posso ajudar voce agora?',
+        text: 'Chat limpo. Sou JORGE TAPIOCA, seu assistente offline. Como posso ajudar voce agora?',
         sender: 'assistant',
         timestamp: new Date(),
       },
@@ -583,17 +569,12 @@ export default function AssistantScreen() {
           </TouchableOpacity>
         </View>
 
-        {!supabaseConnected && (
-          <View style={styles.connectionBanner}>
-            <MaterialIcons name="cloud-off" size={20} color="#F59E0B" />
-            <Text style={styles.bannerText}>
-              IA avancada disponivel apos conectar Supabase
-            </Text>
-            <TouchableOpacity style={styles.bannerButton}>
-              <Text style={styles.bannerButtonText}>Conectar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.offlineBanner}>
+          <MaterialIcons name="offline-bolt" size={20} color="#059669" />
+          <Text style={styles.offlineBannerText}>
+            🤖 Assistente 100% Offline - Funciona sem internet
+          </Text>
+        </View>
 
         <ScrollView
           ref={scrollViewRef}
@@ -1030,32 +1011,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  connectionBanner: {
+  offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#D1FAE5',
   },
-  bannerText: {
-    flex: 1,
+  offlineBannerText: {
     fontSize: 13,
-    color: '#92400E',
+    color: '#065F46',
     marginLeft: 8,
-    fontWeight: '500',
-  },
-  bannerButton: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  bannerButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   messagesContainer: {
     flex: 1,
