@@ -507,12 +507,65 @@ export default function AssistantScreen() {
     return 'Entendo sua pergunta sobre "' + question + '".\n\n🤖 Sou um assistente offline baseado em conhecimento local.\n\nTente perguntar sobre:\n• Procedimentos de contagem\n• Uso de funcionalidades do app\n• Sincronizacao de dispositivos\n• Exportacao de relatorios\n\nDica: Adicione mais conhecimentos na "Base de Conhecimento" para enriquecer minhas respostas!';
   };
 
-  const suggestedQuestions = [
+  // Gerar sugestões dinâmicas baseadas na base de conhecimento
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
     'Como funciona o timer de 20 minutos?',
     'Qual a diferenca entre bodeco e pirarucu?',
     'Como exportar relatorios?',
     'Como sincronizar dispositivos?',
-  ];
+  ]);
+
+  useEffect(() => {
+    generateSuggestions();
+  }, [knowledgeBase]);
+
+  const generateSuggestions = () => {
+    const defaultSuggestions = [
+      'Como funciona o timer de 20 minutos?',
+      'Como exportar relatorios?',
+    ];
+
+    if (knowledgeBase.length === 0) {
+      setSuggestedQuestions([
+        ...defaultSuggestions,
+        'Qual a diferenca entre bodeco e pirarucu?',
+        'Como sincronizar dispositivos?',
+      ]);
+      return;
+    }
+
+    // Pegar até 5 conhecimentos mais recentes para gerar sugestões
+    const recentKnowledge = [...knowledgeBase]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
+    const generatedQuestions = recentKnowledge.map(item => {
+      // Transformar título em pergunta
+      const title = item.title.trim();
+      
+      // Se já é uma pergunta, usar diretamente
+      if (title.endsWith('?')) {
+        return title;
+      }
+      
+      // Detectar padrões comuns e gerar pergunta apropriada
+      if (title.toLowerCase().includes('diferenca') || title.toLowerCase().includes('diferença')) {
+        return `Qual ${title}?`;
+      } else if (title.toLowerCase().includes('como')) {
+        return title.endsWith('?') ? title : `${title}?`;
+      } else if (title.toLowerCase().includes('quando') || title.toLowerCase().includes('periodo')) {
+        return `Qual ${title}?`;
+      } else if (title.toLowerCase().includes('onde')) {
+        return title.endsWith('?') ? title : `${title}?`;
+      } else {
+        return `O que e ${title}?`;
+      }
+    });
+
+    // Mesclar sugestões geradas com padrões (máximo 6 total)
+    const allSuggestions = [...defaultSuggestions, ...generatedQuestions];
+    setSuggestedQuestions(allSuggestions.slice(0, 6));
+  };
 
   const handleSuggestion = (question: string) => {
     setInputText(question);
