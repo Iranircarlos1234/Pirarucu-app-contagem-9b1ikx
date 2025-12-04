@@ -17,6 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Speech from 'expo-speech';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 
 interface Message {
   id: string;
@@ -30,6 +32,7 @@ interface KnowledgeItem {
   category: 'empirico' | 'tecnico' | 'cientifico' | 'curiosidade';
   title: string;
   content: string;
+  images?: string[];
   createdAt: string;
 }
 
@@ -53,6 +56,7 @@ export default function AssistantScreen() {
     category: 'empirico' as const,
     title: '',
     content: '',
+    images: [] as string[],
   });
   const [feedbackMessage, setFeedbackMessage] = useState<{
     type: 'success' | 'error';
@@ -306,6 +310,52 @@ export default function AssistantScreen() {
     await loadKnowledgeBase(true);
   };
 
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        showFeedback('error', '❌ Permissao para acessar galeria negada');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.7,
+        base64: Platform.OS === 'web',
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        let imageUri = '';
+
+        if (Platform.OS === 'web' && asset.base64) {
+          imageUri = `data:image/jpeg;base64,${asset.base64}`;
+        } else {
+          imageUri = asset.uri;
+        }
+
+        setNewKnowledge(prev => ({
+          ...prev,
+          images: [...prev.images, imageUri]
+        }));
+        showFeedback('success', '✅ Imagem adicionada');
+      }
+    } catch (error) {
+      console.error('Erro ao selecionar imagem:', error);
+      showFeedback('error', '❌ Erro ao adicionar imagem');
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setNewKnowledge(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+    showFeedback('success', '✅ Imagem removida');
+  };
+
   const addKnowledge = async () => {
     if (!newKnowledge.title.trim()) {
       showFeedback('error', '❌ Preencha o titulo do conhecimento');
@@ -323,6 +373,7 @@ export default function AssistantScreen() {
         category: newKnowledge.category,
         title: newKnowledge.title.trim(),
         content: newKnowledge.content.trim(),
+        images: newKnowledge.images,
         createdAt: new Date().toISOString(),
       };
 
@@ -335,6 +386,7 @@ export default function AssistantScreen() {
         category: 'empirico',
         title: '',
         content: '',
+        images: [],
       });
       
       setTimeout(() => {
@@ -369,7 +421,8 @@ export default function AssistantScreen() {
               ...item, 
               category: newKnowledge.category,
               title: newKnowledge.title.trim(),
-              content: newKnowledge.content.trim()
+              content: newKnowledge.content.trim(),
+              images: newKnowledge.images
             }
           : item
       );
@@ -383,6 +436,7 @@ export default function AssistantScreen() {
         category: 'empirico',
         title: '',
         content: '',
+        images: [],
       });
       
       setTimeout(() => {
@@ -411,6 +465,7 @@ export default function AssistantScreen() {
       category: item.category,
       title: item.title,
       content: item.content,
+      images: item.images || [],
     });
     setShowKnowledgeModal(true);
   };
@@ -481,7 +536,7 @@ export default function AssistantScreen() {
     }
 
     if (lowerQuestion.includes('relatorio') || lowerQuestion.includes('exportar')) {
-      return 'O sistema exporta relatorios em formato Excel com duas abas:\n\n1. CONTAGENS: Dados detalhados de cada contagem\n2. RESUMO: Totalizacao por ambiente\n\nAcesse a aba "Relatorio Final" para gerar e exportar os dados.';
+      return 'O sistema exporta relatorios em formato Excel com duas abas:\n\n1. CONTAGENS: Dados detalhadas de cada contagem\n2. RESUMO: Totalizacao por ambiente\n\nAcesse a aba "Relatorio Final" para gerar e exportar os dados.';
     }
 
     if (lowerQuestion.includes('sincroniz') || lowerQuestion.includes('bluetooth')) {
@@ -846,7 +901,7 @@ export default function AssistantScreen() {
             <TouchableOpacity onPress={() => {
               setShowKnowledgeModal(false);
               setEditingKnowledge(null);
-              setNewKnowledge({ category: 'empirico', title: '', content: '' });
+              setNewKnowledge({ category: 'empirico', title: '', content: '', images: [] });
               setFeedbackMessage(null);
             }}>
               <MaterialIcons name="close" size={28} color="#6B7280" />
@@ -896,9 +951,25 @@ export default function AssistantScreen() {
                         </View>
                       </View>
                       <Text style={styles.knowledgeTitle}>{item.title}</Text>
-                      <Text style={styles.knowledgeContent} numberOfLines={3}>
+                      <Text style={styles.knowledgeContent} numberOfLines={item.images && item.images.length > 0 ? 2 : 3}>
                         {item.content}
                       </Text>
+                      {item.images && item.images.length > 0 && (
+                        <ScrollView 
+                          horizontal 
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.knowledgeImagesContainer}
+                        >
+                          {item.images.map((imageUri, imgIndex) => (
+                            <Image
+                              key={imgIndex}
+                              source={{ uri: imageUri }}
+                              style={styles.knowledgeImage}
+                              contentFit="cover"
+                            />
+                          ))}
+                        </ScrollView>
+                      )}
                       <Text style={styles.knowledgeDate}>
                         {new Date(item.createdAt).toLocaleDateString('pt-BR')}
                       </Text>
@@ -956,6 +1027,36 @@ export default function AssistantScreen() {
                 textAlignVertical="top"
               />
 
+              <Text style={styles.inputLabel}>Imagens Ilustrativas (Opcional)</Text>
+              <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+                <MaterialIcons name="add-photo-alternate" size={24} color="#2563EB" />
+                <Text style={styles.addImageButtonText}>Adicionar Imagem</Text>
+              </TouchableOpacity>
+
+              {newKnowledge.images.length > 0 && (
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.selectedImagesContainer}
+                >
+                  {newKnowledge.images.map((imageUri, index) => (
+                    <View key={index} style={styles.selectedImageWrapper}>
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={styles.selectedImage}
+                        contentFit="cover"
+                      />
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => removeImage(index)}
+                      >
+                        <MaterialIcons name="close" size={18} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
               <TouchableOpacity
                 style={styles.saveKnowledgeButton}
                 onPress={editingKnowledge ? updateKnowledge : addKnowledge}
@@ -971,7 +1072,7 @@ export default function AssistantScreen() {
                   style={styles.cancelEditButton}
                   onPress={() => {
                     setEditingKnowledge(null);
-                    setNewKnowledge({ category: 'empirico', title: '', content: '' });
+                    setNewKnowledge({ category: 'empirico', title: '', content: '', images: [] });
                   }}
                 >
                   <Text style={styles.cancelEditText}>Cancelar Edicao</Text>
@@ -1459,6 +1560,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
   },
+  knowledgeImagesContainer: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  knowledgeImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#F3F4F6',
+  },
   addKnowledgeSection: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -1521,6 +1633,52 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1F2937',
     minHeight: 120,
+  },
+  addImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    marginBottom: 12,
+    gap: 8,
+  },
+  addImageButtonText: {
+    color: '#2563EB',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  selectedImagesContainer: {
+    marginBottom: 16,
+  },
+  selectedImageWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  selectedImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
   },
   saveKnowledgeButton: {
     flexDirection: 'row',
