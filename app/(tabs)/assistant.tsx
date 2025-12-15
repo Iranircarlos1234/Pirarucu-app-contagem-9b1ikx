@@ -19,21 +19,13 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import { defaultKnowledge, KnowledgeItem } from '../../constants/defaultKnowledge';
 
 interface Message {
   id: string;
   text: string;
   sender: 'user' | 'assistant';
   timestamp: Date;
-}
-
-interface KnowledgeItem {
-  id: string;
-  category: 'empirico' | 'tecnico' | 'cientifico' | 'curiosidade';
-  title: string;
-  content: string;
-  images?: string[];
-  createdAt: string;
 }
 
 export default function AssistantScreen() {
@@ -78,7 +70,7 @@ export default function AssistantScreen() {
   }, [messages]);
 
   useEffect(() => {
-    loadKnowledgeBase();
+    initializeKnowledgeBase();
   }, []);
 
   const scrollToBottom = () => {
@@ -87,47 +79,97 @@ export default function AssistantScreen() {
     }, 100);
   };
 
+  const initializeKnowledgeBase = async () => {
+    try {
+      setIsRefreshing(true);
+      const stored = await AsyncStorage.getItem('pirarucu_knowledge');
+      
+      if (stored) {
+        // Já tem dados salvos - carregar e mesclar com padrões
+        const userKnowledge = JSON.parse(stored);
+        const merged = mergeKnowledge(defaultKnowledge, userKnowledge);
+        await saveKnowledgeBase(merged);
+        console.log('✅ Base de conhecimento mesclada:', merged.length, 'itens');
+      } else {
+        // Primeira inicialização - carregar conhecimentos padrão
+        await saveKnowledgeBase(defaultKnowledge);
+        console.log('✅ Base de conhecimento padrão instalada:', defaultKnowledge.length, 'itens');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao inicializar base de conhecimento:', error);
+      // Fallback: usar apenas conhecimentos padrão
+      setKnowledgeBase(defaultKnowledge);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const mergeKnowledge = (defaults: KnowledgeItem[], user: KnowledgeItem[]): KnowledgeItem[] => {
+    // Criar mapa de IDs existentes no conhecimento do usuário
+    const userIds = new Set(user.map(k => k.id));
+    
+    // Adicionar conhecimentos padrão que não existem no usuário
+    const newDefaults = defaults.filter(d => !userIds.has(d.id));
+    
+    // Mesclar: conhecimentos do usuário + novos padrões
+    return [...user, ...newDefaults];
+  };
+
   const loadKnowledgeBase = async (showFeedbackOnLoad = false) => {
     try {
       setIsRefreshing(true);
       const stored = await AsyncStorage.getItem('pirarucu_knowledge');
       
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setKnowledgeBase(parsed);
+        const userKnowledge = JSON.parse(stored);
+        // Sempre mesclar com conhecimentos padrão ao recarregar
+        const merged = mergeKnowledge(defaultKnowledge, userKnowledge);
+        setKnowledgeBase(merged);
         
         // Calcular informações de armazenamento
         const dataSize = (new Blob([stored]).size / 1024).toFixed(2);
-        const dates = parsed.map((item: KnowledgeItem) => new Date(item.createdAt).getTime());
+        const dates = merged.map((item: KnowledgeItem) => new Date(item.createdAt).getTime());
         const lastUpdate = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleString('pt-BR') : null;
         
         setStorageInfo({
-          totalItems: parsed.length,
+          totalItems: merged.length,
           lastUpdate,
           dataSize: `${dataSize} KB`
         });
         
-        console.log('✅ Base de conhecimento carregada:', parsed.length, 'itens');
+        console.log('✅ Base de conhecimento carregada:', merged.length, 'itens');
         
+        const customCount = merged.filter(k => !k.isDefault).length;
         if (showFeedbackOnLoad) {
-          showFeedback('success', `✅ ${parsed.length} conhecimentos carregados do armazenamento`);
+          showFeedback('success', `✅ ${merged.length} conhecimentos carregados (${defaultKnowledge.length} padrão + ${customCount} customizados)`);
         }
       } else {
-        console.log('ℹ️ Nenhuma base de conhecimento encontrada');
-        setKnowledgeBase([]);
-        setStorageInfo({ totalItems: 0, lastUpdate: null, dataSize: '0 KB' });
+        // Usar conhecimentos padrão se não houver dados salvos
+        console.log('ℹ️ Carregando conhecimentos padrão');
+        setKnowledgeBase(defaultKnowledge);
+        const dataSize = (new Blob([JSON.stringify(defaultKnowledge)]).size / 1024).toFixed(2);
+        setStorageInfo({ 
+          totalItems: defaultKnowledge.length, 
+          lastUpdate: new Date().toLocaleString('pt-BR'),
+          dataSize: `${dataSize} KB` 
+        });
         
         if (showFeedbackOnLoad) {
-          showFeedback('error', 'ℹ️ Nenhum conhecimento armazenado encontrado');
+          showFeedback('success', `✅ ${defaultKnowledge.length} conhecimentos padrão carregados`);
         }
       }
     } catch (error) {
       console.error('❌ Erro ao carregar base de conhecimento:', error);
-      setKnowledgeBase([]);
-      setStorageInfo({ totalItems: 0, lastUpdate: null, dataSize: '0 KB' });
+      setKnowledgeBase(defaultKnowledge);
+      const dataSize = (new Blob([JSON.stringify(defaultKnowledge)]).size / 1024).toFixed(2);
+      setStorageInfo({ 
+        totalItems: defaultKnowledge.length, 
+        lastUpdate: null, 
+        dataSize: `${dataSize} KB` 
+      });
       
       if (showFeedbackOnLoad) {
-        showFeedback('error', '❌ Erro ao carregar dados do armazenamento');
+        showFeedback('error', '❌ Erro ao carregar dados - usando conhecimentos padrão');
       }
     } finally {
       setIsRefreshing(false);
@@ -450,6 +492,14 @@ export default function AssistantScreen() {
 
   const deleteKnowledge = async (id: string) => {
     try {
+      const item = knowledgeBase.find(k => k.id === id);
+      
+      // Não permitir deletar conhecimentos padrão
+      if (item?.isDefault) {
+        showFeedback('error', '⚠️ Conhecimentos pré-instalados não podem ser excluídos');
+        return;
+      }
+      
       const updated = knowledgeBase.filter(item => item.id !== id);
       await saveKnowledgeBase(updated);
       showFeedback('success', '✅ Conhecimento excluido com sucesso!');
@@ -460,6 +510,12 @@ export default function AssistantScreen() {
   };
 
   const startEditKnowledge = (item: KnowledgeItem) => {
+    // Não permitir editar conhecimentos padrão
+    if (item.isDefault) {
+      showFeedback('error', '⚠️ Conhecimentos pré-instalados não podem ser editados');
+      return;
+    }
+    
     setEditingKnowledge(item);
     setNewKnowledge({
       category: item.category,
@@ -931,9 +987,17 @@ export default function AssistantScreen() {
                   knowledgeBase.map((item) => (
                     <View key={item.id} style={styles.knowledgeCard}>
                       <View style={styles.knowledgeHeader}>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryIcon}>{getCategoryIcon(item.category)}</Text>
-                          <Text style={styles.categoryText}>{getCategoryLabel(item.category)}</Text>
+                        <View style={styles.knowledgeBadges}>
+                          <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryIcon}>{getCategoryIcon(item.category)}</Text>
+                            <Text style={styles.categoryText}>{getCategoryLabel(item.category)}</Text>
+                          </View>
+                          {item.isDefault && (
+                            <View style={styles.defaultBadge}>
+                              <MaterialIcons name="verified" size={14} color="#059669" />
+                              <Text style={styles.defaultBadgeText}>Pré-instalado</Text>
+                            </View>
+                          )}
                         </View>
                         <View style={styles.knowledgeActions}>
                           <TouchableOpacity
@@ -1097,7 +1161,10 @@ export default function AssistantScreen() {
               <View style={styles.syncInfoCard}>
                 <MaterialIcons name="storage" size={32} color="#2563EB" />
                 <Text style={styles.syncInfoNumber}>{storageInfo.totalItems}</Text>
-                <Text style={styles.syncInfoLabel}>Itens Armazenados</Text>
+                <Text style={styles.syncInfoLabel}>Total de Itens</Text>
+                <Text style={styles.syncInfoSubLabel}>
+                  ({defaultKnowledge.length} padrão)
+                </Text>
               </View>
               <View style={styles.syncInfoCard}>
                 <MaterialIcons name="cloud-upload" size={32} color="#059669" />
@@ -1195,7 +1262,9 @@ export default function AssistantScreen() {
             <View style={styles.syncNote}>
               <MaterialIcons name="info" size={20} color="#2563EB" />
               <Text style={styles.syncNoteText}>
-                Os dados funcionam 100% offline. A sincronizacao e manual via arquivo JSON.
+                ✅ Base de conhecimento embutida no app ({defaultKnowledge.length} itens pré-instalados)
+                {"\n"}📱 Dados sincronizam automaticamente entre PC e celular
+                {"\n"}💾 Conhecimentos customizados são preservados em atualizações
               </Text>
             </View>
           </View>
@@ -1517,6 +1586,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  knowledgeBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1524,6 +1599,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+  },
+  defaultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  defaultBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
   },
   categoryIcon: {
     fontSize: 16,
@@ -1776,6 +1865,11 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
   },
+  syncInfoSubLabel: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
   syncInstructions: {
     padding: 20,
   },
@@ -1838,7 +1932,7 @@ const styles = StyleSheet.create({
   },
   syncNote: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: 16,
     margin: 16,
     backgroundColor: '#EFF6FF',
